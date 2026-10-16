@@ -1,11 +1,11 @@
-# 1. Fetch latest Ubuntu 22.04 LTS AMI
+# 1. Fetch latest Ubuntu 24.04 LTS (Noble Numbat) AMI
 data "aws_ami" "ubuntu" {
   most_recent = true
   owners      = ["099720109477"] # Canonical
 
   filter {
     name   = "name"
-    values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"]
+    values = ["ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server-*"]
   }
 
   filter {
@@ -76,6 +76,12 @@ resource "aws_iam_role_policy_attachment" "jenkins_ecr" {
 # Attach CloudWatch Agent logging/metrics permissions
 resource "aws_iam_role_policy_attachment" "jenkins_cloudwatch" {
   policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+  role       = aws_iam_role.jenkins.name
+}
+
+# Attach SSM Core permissions for Systems Manager management
+resource "aws_iam_role_policy_attachment" "jenkins_ssm" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
   role       = aws_iam_role.jenkins.name
 }
 

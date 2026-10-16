@@ -14,6 +14,7 @@
       - amazon-ecr
       - pipeline-stage-view
       - credentials-binding
+      - ansicolor
 
   tasks:
     - name: Clean up any stale Jenkins files from previous attempts
@@ -44,12 +45,16 @@
           - unzip
           - jq
           - tar
+          - python3-pip
+          - python3-venv
         state: present
 
-    # 1. Install Java 21 (Required by modern Jenkins LTS)
-    - name: Install OpenJDK 21
+    # 1. Install Java 25 (Latest supported runtime for Jenkins LTS)
+    - name: Install OpenJDK 25
       apt:
-        name: openjdk-21-jdk
+        name:
+          - openjdk-25-jdk-headless
+          - openjdk-25-jre-headless
         state: present
 
     # 2. Add Official Jenkins Repository & Install Jenkins
@@ -204,17 +209,46 @@
         state: present
         update_cache: yes
 
-    # 8. Automated Jenkins Plugin Installation
+    # 8. Jenkins Security, Hardening & URL Initialization
+    - name: Ensure /var/lib/jenkins/init.groovy.d directory exists
+      file:
+        path: /var/lib/jenkins/init.groovy.d
+        state: directory
+        owner: jenkins
+        group: jenkins
+        mode: '0755'
+
+    - name: Deploy basic security and URL configuration script
+      copy:
+        src: files/basic-security.groovy
+        dest: /var/lib/jenkins/init.groovy.d/basic-security.groovy
+        owner: jenkins
+        group: jenkins
+        mode: '0644'
+
+    - name: Deploy Jenkins hardening & agent configuration script
+      copy:
+        src: files/jenkins-hardening.groovy
+        dest: /var/lib/jenkins/init.groovy.d/jenkins-hardening.groovy
+        owner: jenkins
+        group: jenkins
+        mode: '0644'
+
+    - name: Ensure deprecated monitor dismissal script is removed
+      file:
+        path: /var/lib/jenkins/init.groovy.d/fix-monitors.groovy
+        state: absent
+
+    - name: Restart Jenkins to apply initialization scripts
+      systemd:
+        name: jenkins
+        state: restarted
+
     - name: Wait for Jenkins port 8080 to become available
       wait_for:
         port: 8080
         delay: 15
         timeout: 120
-
-    - name: Wait for Jenkins initial admin password file
-      wait_for:
-        path: /var/lib/jenkins/secrets/initialAdminPassword
-        timeout: 60
 
     - name: Read Jenkins Initial Admin Password
       slurp:
@@ -225,6 +259,7 @@
       set_fact:
         jenkins_admin_password: "{{ initial_admin_password_raw.content | b64decode | trim }}"
 
+    # 9. Automated Jenkins Plugin Installation
     - name: Download Jenkins CLI jar
       get_url:
         url: "{{ jenkins_cli_url }}"
@@ -233,7 +268,7 @@
 
     - name: Install required Jenkins plugins via CLI
       command: >
-        java -jar {{ jenkins_cli_dest }} -s http://localhost:8080/
+        java -jar {{ jenkins_cli_dest }} -s http://{{ ansible_host }}:8080/
         -auth admin:{{ jenkins_admin_password }}
         install-plugin {{ item }} -deploy
       loop: "{{ jenkins_plugins }}"
@@ -248,6 +283,55 @@
       systemd:
         name: jenkins
         state: restarted
+
+    # 10. Configure Distributed Build Agent
+    - name: Ensure agent directories exist
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: ubuntu
+        group: ubuntu
+        mode: '0755'
+      loop:
+        - /opt/jenkins-agent
+        - /home/ubuntu/jenkins-agent
+
+    - name: Download Jenkins Agent jar
+      get_url:
+        url: "http://localhost:8080/jnlpJars/agent.jar"
+        dest: "/opt/jenkins-agent/agent.jar"
+        owner: ubuntu
+        group: ubuntu
+        mode: '0755'
+
+    - name: Create systemd unit for Jenkins build agent
+      copy:
+        dest: /etc/systemd/system/jenkins-agent.service
+        content: |
+          [Unit]
+          Description=Jenkins Distributed Build Agent
+          After=network.target jenkins.service
+          Wants=jenkins.service
+
+          [Service]
+          Type=simple
+          User=ubuntu
+          Group=ubuntu
+          WorkingDirectory=/home/ubuntu/jenkins-agent
+          ExecStart=/bin/bash -c '/usr/bin/java -jar /opt/jenkins-agent/agent.jar -url http://{{ ansible_host }}:8080/ -secret $$(cat /var/lib/jenkins/agent-secret.txt) -name build-agent -workDir /home/ubuntu/jenkins-agent -webSocket'
+          Restart=always
+          RestartSec=10
+
+          [Install]
+          WantedBy=multi-user.target
+        mode: '0644'
+
+    - name: Enable and start Jenkins build agent service
+      systemd:
+        name: jenkins-agent
+        state: started
+        enabled: yes
+        daemon_reload: yes
 
     - name: Display Jenkins Setup Credentials
       debug:

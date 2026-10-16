@@ -38,8 +38,10 @@ pipeline {
                 echo '=== Running Linting and Pytest Unit Tests with Code Coverage ==='
                 dir('app') {
                     sh '''
-                        python3 -m pip install --upgrade pip
-                        python3 -m pip install -r requirements.txt pytest pytest-cov ruff
+                        python3 -m venv .venv
+                        . .venv/bin/activate
+                        pip install --upgrade pip
+                        pip install -r requirements.txt pytest pytest-cov ruff
                         
                         echo "--- Running Ruff Code Linter ---"
                         ruff check . || true

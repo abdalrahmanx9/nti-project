@@ -10,14 +10,24 @@ locationConfig.setUrl("http://98.86.85.33:8080/")
 locationConfig.save()
 
 // 2. Configure Security Realm with admin user
-def realm = new HudsonPrivateSecurityRealm(false)
-realm.createAccount("admin", "admin")
-instance.setSecurityRealm(realm)
+def realm = instance.getSecurityRealm()
+if (!(realm instanceof HudsonPrivateSecurityRealm)) {
+    realm = new HudsonPrivateSecurityRealm(false)
+    instance.setSecurityRealm(realm)
+}
 
-// 3. Configure Authorization Strategy
+def adminUser = hudson.model.User.get("admin", false)
+if (adminUser == null) {
+    def secretFile = new File("/var/lib/jenkins/secrets/initialAdminPassword")
+    def password = secretFile.exists() ? secretFile.text.trim() : java.util.UUID.randomUUID().toString()
+    realm.createAccount("admin", password)
+    println("--> Admin account initialized from local host secret.")
+}
+
+// 3. Configure Authorization Strategy (Allow anonymous read for GitHub webhook push notifications)
 def strategy = new FullControlOnceLoggedInAuthorizationStrategy()
-strategy.setAllowAnonymousRead(false)
+strategy.setAllowAnonymousRead(true)
 instance.setAuthorizationStrategy(strategy)
 
 instance.save()
-println("--> Jenkins URL and admin user (admin/admin) successfully configured!")
+println("--> Jenkins security and root URL configured successfully!")
