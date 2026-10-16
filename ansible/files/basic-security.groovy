@@ -5,8 +5,7 @@ import hudson.security.*
 def instance = Jenkins.get()
 
 // 1. Set Jenkins root URL to prevent CLI 403 errors
-def locationConfig = jenkins.model.JenkinsLocationConfiguration.get()
-locationConfig.setUrl("http://98.86.85.33:8080/")
+locationConfig.setUrl(System.getenv("JENKINS_PUBLIC_URL") ?: "http://localhost:8080/")
 locationConfig.save()
 
 // 2. Configure Security Realm with admin user

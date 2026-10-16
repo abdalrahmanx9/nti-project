@@ -1,6 +1,27 @@
-# NTI DevOps Final Project: End-to-End Cloud Platform
+# NTI DevOps Final Project: Enterprise Cloud-Native Platform
 
-Welcome to the **NTI DevOps Final Project** repository! This project implements an enterprise-grade, automated DevOps platform on **Amazon Web Services (AWS)** using modern Infrastructure as Code (IaC), GitOps, Zero-Trust security, CI/CD automation, and full-stack observability.
+Welcome to the **NTI DevOps Final Project** repository! This project implements an enterprise-grade, automated DevOps platform on **Amazon Web Services (AWS)** using modern Infrastructure as Code (IaC), GitOps continuous delivery, Zero-Trust security, CI/CD automation, and full-stack observability.
+
+---
+
+## 🧭 Platform Access Directory
+
+| Tool / Component | Access URL / Port-Forward | Authentication Method | Primary Function |
+| :--- | :--- | :--- | :--- |
+| **Production Web App** | **`http://<CUSTOM_DOMAIN_OR_LB>`** | Public Internet Access | Production FastAPI Telemetry & Load Generator |
+| **Interactive API Docs**| **`http://<CUSTOM_DOMAIN_OR_LB>/docs`** | Public Swagger UI | Test `/api/status`, `/healthz`, `/api/simulate-load` |
+| **Jenkins CI/CD** | **`http://<JENKINS_HOST>:8080`** | `admin` / dynamically generated | Multi-branch CI/CD Pipeline & Automated Scans |
+| **ArgoCD GitOps** | **`https://localhost:8081`** | `admin` / secret `argocd-initial-admin-secret` | GitOps Sync from GitOps repository |
+| **Grafana Dashboard** | **`http://localhost:3000`** | `admin` / set via Helm values | Real-time Workload, HPA Timeline & Alert Dashboards |
+| **Prometheus Server** | **`http://localhost:9090`** | Standard access | Metrics Store, Target Discovery (`/targets`) & Alert rules |
+| **Alertmanager** | **`http://localhost:9093`** | Standard access | Alert routing & Email notifications via SMTP |
+| **Jenkins Server SSH**| `ssh ubuntu@<JENKINS_HOST>` | Private key authentication (`.pem`) | Direct EC2 host terminal administration |
+
+> **Port-Forward Commands for Local Inspection**:
+> - **ArgoCD**: `kubectl port-forward svc/argocd-server -n argocd 8081:443`
+> - **Grafana**: `kubectl port-forward svc/prometheus-grafana 3000:80 -n monitoring`
+> - **Prometheus**: `kubectl port-forward svc/prometheus-kube-prometheus-prometheus 9090:9090 -n monitoring`
+> - **Alertmanager**: `kubectl port-forward svc/prometheus-kube-prometheus-alertmanager 9093:9093 -n monitoring`
 
 ---
 
@@ -12,13 +33,13 @@ The system is designed with a strict separation between **Application Source Cod
                       +---------------------------------------+
                       |       Developer Git Commit / PR       |
                       +-------------------+-------------------+
-                                          |
+                                          | (GitHub Webhook)
                                           v
 +-----------------------------------------------------------------------------------+
 |                        Jenkins CI Automation (EC2 Server)                         |
-|  1. SCM Checkout  ->  2. Ruff Lint & Pytest  ->  3. SonarQube Quality Gate        |
-|  4. Docker Build  ->  5. Trivy CVE Scan      ->  6. Push to Amazon ECR (Private)  |
-|  7. Update Image Tag in Dedicated GitOps Repository                               |
+|  1. SCM Checkout  ->  2. Ruff Lint & Pytest  ->  3. Docker Multi-Stage Build       |
+|  4. Trivy CVE Scan -> 5. Push to Amazon ECR  ->  6. Trigger GitOps Repository     |
+|  7. Automated HTML Failure Email dispatched on failure to configured DevOps team  |
 +-----------------------------------------+-----------------------------------------+
                                           |
                                           v
@@ -26,20 +47,24 @@ The system is designed with a strict separation between **Application Source Cod
 |                       Amazon EKS Cluster (Kubernetes 1.30)                        |
 |                                                                                   |
 |  +--------------------+         +----------------------------------------------+  |
-|  | ArgoCD GitOps Controller      |  | Kubernetes Gateway API (amazon-vpc-lattice)   |  |
-|  | - Watches GitOps Repo        |  | - Replaces legacy Ingress                     |  |
-|  | - Self-healing & Zero Drift  |  | - Routes public HTTP traffic to App Pods      |  |
-|  +--------------------+         +----------------------------------------------+  |
-|                                                                                   |
-|  +--------------------+         +----------------------------------------------+  |
-|  | App Pods (Replica 2-6)        |  | Karpenter Autoscaler                          |  |
-|  | - Python FastAPI Dashboard   |  | - Just-In-Time EC2 Fleet provisioning         |  |
-|  | - Non-root execution (UID 10001) | - Scales cluster in < 45 seconds            |  |
-|  | - Auto-scaled via HPA (CPU>75%) |                                              |  |
+|  | ArgoCD GitOps      |         | Public AWS Elastic Load Balancer (ELB)       |  |
+|  | - Watches GitOps   |         | - Maps to custom domain via DNS/Cloudflare   |  |
+|  | - Zero Drift Sync  |         | - Routes traffic to nti-app Service (Port 80)|  |
 |  +--------------------+         +----------------------------------------------+  |
 |                                                                                   |
 |  +-----------------------------------------------------------------------------+  |
-|  | Zero-Trust NetworkPolicies: Blocks all ingress/egress except DNS & RDS:5432  |  |
+|  | Kubernetes Workload & Horizontal Pod Autoscaler (HPA)                       |  |
+|  | - Python FastAPI Non-Root Containers (UID 10001)                           |  |
+|  | - Metrics-Server driving live CPU & Memory metrics                          |  |
+|  | - Auto-scales replicas from 2 up to 6 pods during simulated load            |  |
+|  +-----------------------------------------------------------------------------+  |
+|                                                                                   |
+|  +-----------------------------------------------------------------------------+  |
+|  | Full-Stack Observability Stack (kube-prometheus-stack)                      |  |
+|  | - ServiceMonitor scraping /metrics endpoint                                 |  |
+|  | - Prometheus rules for CPU > 80%, RAM > 80%, DB Latency > 500ms alarms      |  |
+|  | - Alertmanager sending rich HTML alert cards to configured email            |  |
+|  | - Custom Grafana dashboard with HPA scaling timeline & live stress state   |  |
 |  +-----------------------------------------------------------------------------+  |
 +-----------------------------------------+-----------------------------------------+
                                           |
@@ -48,7 +73,8 @@ The system is designed with a strict separation between **Application Source Cod
                      v                                         v
 +---------------------------------------+   +---------------------------------------+
 |        AWS RDS PostgreSQL Database    |   |         AWS Secrets Manager           |
-| (Private Subnets, restricted to EKS)  |   | (Syncs DB password via ExternalSecret)|
+|  - Private Subnets, Port 5432         |   |  - Dynamic master DB password         |
+|  - DB: `ntiapp` (User: `dbadmin`)     |   |  - Secret: production-rds-credentials |
 +---------------------------------------+   +---------------------------------------+
 ```
 
@@ -59,12 +85,12 @@ The system is designed with a strict separation between **Application Source Cod
 ```
 .
 ├── app/                        # Python Web Application & Tests
-│   ├── main.py                 # FastAPI application with dashboard & /metrics
+│   ├── main.py                 # FastAPI application with dashboard, /metrics & /api/simulate-load
 │   ├── config.py               # Pydantic environment configuration
 │   ├── database.py             # PostgreSQL connection with live latency metric
-│   ├── metrics.py              # Prometheus metrics collector
+│   ├── metrics.py              # Prometheus metrics collector (DB latency, request rates, stress state)
 │   ├── Dockerfile              # Multi-stage build powered by Astral uv
-│   ├── templates/ & static/    # Dark-mode responsive dashboard UI
+│   ├── templates/ & static/    # Dark-mode responsive dashboard UI & live event stream
 │   └── tests/                  # Automated unit test suite with pytest
 │
 ├── terraform/                  # Modular Infrastructure as Code (IaC)
@@ -74,253 +100,98 @@ The system is designed with a strict separation between **Application Source Cod
 │   └── modules/                # VPC, EKS, RDS, Secrets Manager, EC2, ECR, S3, Backup
 │
 ├── ansible/                    # Configuration Management
-│   ├── jenkins_setup.yml       # Jenkins LTS 2.580.1, Java 21, Docker, kubectl, Helm, Trivy
+│   ├── jenkins_setup.yml       # Jenkins LTS, Java 21, Docker, kubectl, Helm, Trivy
 │   ├── cloudwatch_agent.yml    # AWS CloudWatch telemetry streaming
 │   ├── inventory.example.ini   # Template for EC2 target host connection
-│   └── run-playbook.ps1        # Docker-based runner script (runs on any OS)
+│   └── run-playbook.ps1        # Cross-platform playbook execution runner
 │
 ├── charts/nti-app/             # Production Helm Chart
 │   ├── Chart.yaml              # Chart metadata
-│   ├── values.yaml             # Configurable values (replicas, image, resources)
-│   └── templates/              # Deployment, Service, Gateway, HTTPRoute, HPA, ESO
+│   ├── values.yaml             # Configurable values (replicas, image, LoadBalancer, probes)
+│   └── templates/              # Deployment, Service, ServiceMonitor, HPA, Secret references
 │
-├── k8s/                        # Cluster Platform Manifests
-│   ├── network-policies/       # Zero-Trust security (Default Deny, Ingress, Egress)
-│   ├── karpenter/              # Fast node autoscaling (NodePool & EC2NodeClass)
-│   └── argocd/                 # GitOps Application tracking the deployment repo
+├── monitoring/                 # Observability & Alerting Stack
+│   ├── prometheus-rules.yaml   # PrometheusRule: CPU/RAM > 80%, DB Latency alarms
+│   ├── alertmanager-config.yaml# AlertmanagerConfig: HTML email routing via SMTP
+│   └── grafana-dashboard.json  # Comprehensive Grafana dashboard with HPA scaling timeline
 │
-├── monitoring/                 # Observability Stack
-│   ├── prometheus-rules.yaml   # PrometheusRule: CPU/RAM > 80% alarms
-│   ├── alertmanager-config.yaml# Alertmanager webhook notification routing
-│   └── grafana-dashboard.json  # Provisioned dashboard with thresholds & latency
+├── scripts/                    # Automation Scripts
+│   └── send_failure_email.py   # Python HTML email sender for Jenkins pipeline failures
 │
-├── Jenkinsfile                 # 7-Stage Multi-Branch Declarative CI/CD Pipeline
+├── Jenkinsfile                 # 7-Stage Declarative CI/CD Pipeline with HTML alert notifications
 └── docker-compose.yml          # Local multi-container development environment
 ```
 
 ---
 
-## ⚙️ Prerequisites
+## ⚡ Live Load Simulation & HPA Auto-Scaling Demo
 
-Before running this project, ensure you have the following installed on your machine:
+To demonstrate auto-scaling and Prometheus threshold alarms during project evaluation:
 
-1. **Git**: [Download Git](https://git-scm.com/)
-2. **AWS CLI v2**: Configured with administrator or appropriate IAM credentials:
-   ```bash
-   aws configure
-   ```
-3. **Terraform (>= 1.10.0)**: [Download Terraform](https://developer.hashicorp.com/terraform/downloads)
-4. **Docker Desktop**: [Download Docker](https://www.docker.com/products/docker-desktop/)
-5. **kubectl (v1.30)** & **Helm (v3)**:
-   ```bash
-   # On Windows via winget
-   winget install Kubernetes.kubectl
-   winget install Helm.Helm
-   ```
-
----
-
-## 🚀 Step-by-Step Deployment Guide for Colleagues
-
-Follow these steps sequentially to deploy the full stack.
-
-### Step 1: Clone the Repository & Setup Git
-
-```bash
-git clone <YOUR_PUBLIC_REPO_URL> nti-project
-cd nti-project
-```
-
----
-
-### Step 2: Test the Application Locally (Docker Compose)
-
-Before deploying to the cloud, verify that the application and PostgreSQL work locally:
-
-```bash
-# Launch the Python App + PostgreSQL local container stack
-docker compose up --build -d
-
-# Check status
-docker compose ps
-```
-
-- Open your browser at [http://localhost:8000](http://localhost:8000) to view the live dashboard.
-- View Prometheus metrics at [http://localhost:8000/metrics](http://localhost:8000/metrics).
-- Stop the local stack when done:
-  ```bash
-  docker compose down
-  ```
-
----
-
-### Step 3: Provision AWS Infrastructure with Terraform
-
-1. Navigate to the terraform directory:
-   ```bash
-   cd terraform
-   ```
-
-2. Copy the example variables file:
-   ```bash
-   cp terraform.tfvars.example terraform.tfvars
-   ```
-
-3. Open `terraform.tfvars` and set your keypair name and configuration:
-   ```hcl
-   aws_region            = "us-east-1"
-   environment           = "production"
-   jenkins_ssh_key_name  = "your-ec2-keypair"  # Must exist in AWS us-east-1
-   ```
-
-4. Initialize and apply Terraform:
-   ```bash
-   terraform init
-   terraform apply
-   ```
-   *Type `yes` when prompted.*
-
-5. Note the outputs produced by Terraform:
-   - `jenkins_public_ip` (e.g., `98.86.85.33`)
-   - `eks_cluster_name` (`nti-devops-eks`)
-   - `ecr_repository_url`
-   - `rds_address`
-
----
-
-### Step 4: Configure the Jenkins Server via Ansible
-
-1. Navigate to the `ansible` folder:
-   ```bash
-   cd ../ansible
-   ```
-
-2. Copy the inventory template:
-   ```bash
-   cp inventory.example.ini inventory.ini
-   ```
-
-3. Edit `inventory.ini` with your Jenkins IP and the path to your `.pem` key:
-   ```ini
-   [jenkins_servers]
-   jenkins_master ansible_host=YOUR_JENKINS_PUBLIC_IP ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/your-key.pem
-   ```
-
-4. Execute the Jenkins setup playbook (using the cross-platform runner script):
-   ```powershell
-   .\run-playbook.ps1 jenkins_setup.yml
-   ```
-   *This automatically installs Java 21, Jenkins LTS, Docker CE, AWS CLI v2, kubectl, Helm, and Trivy.*
-
-5. Install and start the AWS CloudWatch telemetry agent:
-   ```powershell
-   .\run-playbook.ps1 cloudwatch_agent.yml
-   ```
-
-6. Access your live Jenkins web console:
-   - **URL**: `http://YOUR_JENKINS_PUBLIC_IP:8080`
-   - **Initial Admin Password**: Displayed at the end of the playbook recap, or viewable on the server at:
-     ```bash
-     ssh -i ~/.ssh/your-key.pem ubuntu@YOUR_JENKINS_PUBLIC_IP 'sudo cat /var/lib/jenkins/secrets/initialAdminPassword'
+1. **Open the Dashboards**:
+   - Web App UI: Access via load balancer or custom domain.
+   - Grafana: View the *Pod CPU Utilization* & *HPA Timeline* panels.
+2. **Trigger Load Simulation**:
+   - In the web app, click **Simulate Load (>80% Stress)**, OR run via PowerShell:
+     ```powershell
+     kubectl exec -n default deployment/nti-app -- python -c "
+     import urllib.request, json
+     req = urllib.request.Request('http://localhost:8000/api/simulate-load', data=json.dumps({'duration_seconds': 45}).encode(), headers={'Content-Type': 'application/json'}, method='POST')
+     resp = urllib.request.urlopen(req)
+     print(resp.read().decode())
+     "
      ```
+3. **What to Observe**:
+   - **Frontend App**: Countdown badge activates (`🔥 Simulating Load (45s remaining)...`) and alarm pill turns red.
+   - **Grafana**:
+     - *Simulated Stress State* switches from green `IDLE` to flashing red `🔥 STRESS ACTIVE (>80%)`.
+     - *Pod CPU Utilization* climbs above the red **80% Threshold line**.
+     - *HPA Pod Auto-Scaling Timeline* visually steps up from **2 to 6 replicas**.
+   - **Kubernetes CLI**:
+     ```powershell
+     kubectl get hpa -n default -w
+     ```
+     Watch `REPLICAS` scale from `2` up to `6`.
+   - **Cooldown**: After 45s, CPU drops to baseline and Kubernetes HPA safely scales replicas back down after the stabilization window.
 
 ---
 
-### Step 5: Connect `kubectl` to your AWS EKS Cluster
+## 📧 Automated Notification System
 
-Update your local kubeconfig to point to the newly created EKS cluster:
+Both the **CI/CD Pipeline** and the **Kubernetes Monitoring Stack** send styled HTML emails to configured alert recipients:
 
-```bash
-aws eks update-kubeconfig --region us-east-1 --name nti-devops-eks
+### 1. Jenkins Pipeline Failure Notification
+- Triggered automatically if any pipeline stage (linting, tests, build, CVE scan, ECR push) fails.
+- Sends a dark-themed HTML card with the build number, branch, commit author, failing stage, and a direct button link to the Jenkins console logs.
+- Configured via environment variables: `ALERT_RECIPIENT_EMAIL`, `SMTP_USER`, `SMTP_PASSWORD`.
 
-# Verify connection to worker nodes
-kubectl get nodes -o wide
-```
-
----
-
-### Step 6: Deploy Application using Helm & Gateway API
-
-1. Navigate back to project root and deploy the Helm chart:
-   ```bash
-   helm upgrade --install nti-app ./charts/nti-app \
-     --set image.tag=latest \
-     --namespace default
-   ```
-
-2. Inspect your deployed Gateway, HTTPRoute, and Pods:
-   ```bash
-   kubectl get gateway,httproute -n default
-   kubectl get pods -l app.kubernetes.io/name=nti-app
-   ```
-
----
-
-### Step 7: Apply Zero-Trust Network Policies & Autoscaling
-
-1. Enforce Zero-Trust network containment:
-   ```bash
-   kubectl apply -f k8s/network-policies/
-   ```
-   *This blocks all unauthorized East-West and North-South traffic, allowing pods to communicate strictly with CoreDNS (port 53) and RDS PostgreSQL (port 5432).*
-
-2. Apply Karpenter NodePool autoscaling:
-   ```bash
-   kubectl apply -f k8s/karpenter/
-   ```
-
----
-
-### Step 8: Configure ArgoCD GitOps Continuous Delivery
-
-In production GitOps, ArgoCD tracks a **dedicated GitOps repository** (separated from application code) where environment values live:
-
-1. Create a repository on GitHub (e.g., `https://github.com/<your-org>/nti-devops-gitops.git`) containing the `charts/nti-app` directory.
-2. Update the `repoURL` in [k8s/argocd/application.yaml](file:///f:/mywork/NTI%20Project/k8s/argocd/application.yaml) to point to your GitOps repository.
-3. Apply the ArgoCD Application manifest:
-   ```bash
-   kubectl apply -f k8s/argocd/application.yaml
-   ```
-   *ArgoCD will continuously monitor Git, detect new image tags, and synchronize deployments automatically.*
-
----
-
-### Step 9: Configure Monitoring & Observability
-
-1. Apply Prometheus alerting rules (triggers if Pod CPU or RAM exceeds 80%):
-   ```bash
-   kubectl apply -f monitoring/prometheus-rules.yaml
-   ```
-
-2. Apply Alertmanager webhook routing:
-   ```bash
-   kubectl apply -f monitoring/alertmanager-config.yaml
-   ```
-
-3. Import the Grafana dashboard:
-   - In your Grafana UI, click **Dashboards** $\rightarrow$ **Import**.
-   - Upload [monitoring/grafana-dashboard.json](file:///f:/mywork/NTI%20Project/monitoring/grafana-dashboard.json).
-   - This provides visual gauges for active replicas, database query latency, HTTP throughput, and resource limits with 80% alarm lines.
+### 2. Prometheus Alertmanager Notification
+- Triggered if:
+  - Pod CPU utilization > 80% for > 5m (`PodCPUUsageOver80Percent`)
+  - Pod RAM utilization > 80% for > 5m (`PodMemoryUsageOver80Percent`)
+  - RDS PostgreSQL ping latency > 500ms (`DatabaseQueryLatencyHigh`)
+  - Application database connection lost (`AppHealthCheckFailing`)
+- Dispatches styled alert cards directly to configured alert recipients via SMTP. Credentials are read from Kubernetes Secret `alertmanager-smtp-auth`.
 
 ---
 
 ## 🔒 Security Best Practices Implemented
 
-- **No Hardcoded Secrets**: Database credentials are generated dynamically by Terraform into **AWS Secrets Manager** and synced into Kubernetes via the **External Secrets Operator (ESO)**.
-- **Non-Root Containers**: Docker containers run under UID `10001` with read-only root filesystems and dropped Linux capabilities.
-- **Vulnerability Scanning**: Every container image is scanned by **Trivy** in the Jenkins pipeline prior to publishing.
+- **Zero Plain-Text Secrets in Git**: No credentials, passwords, or personal contact info committed. Master credentials are dynamically generated by Terraform in **AWS Secrets Manager** and mounted via Kubernetes Secrets.
+- **Non-Root Containers**: Docker container runs under UID `10001` with read-only root filesystems and dropped Linux capabilities.
+- **Vulnerability Scanning**: Every container image is scanned by **Trivy** in the Jenkins pipeline prior to publishing to AWS ECR.
 - **Zero-Trust NetworkPolicies**: Network policies isolate application workloads, preventing lateral movement in case of a breach.
-- **Native State Locking**: Terraform state uses S3 conditional writes (`use_lockfile = true`) eliminating the need for a separate DynamoDB table.
+- **Native State Locking**: Terraform state uses S3 conditional writes (`use_lockfile = true`) eliminating DynamoDB locking overhead.
 
 ---
 
 ## 🧹 Teardown & Clean Up
 
-To avoid incurring ongoing AWS charges when you finish testing:
+To avoid ongoing AWS charges when finished with evaluation:
 
 ```bash
-# 1. Uninstall Helm release
-helm uninstall nti-app
+# 1. Uninstall Helm release & Load Balancer
+helm uninstall nti-app -n default
 
 # 2. Destroy AWS Infrastructure via Terraform
 cd terraform

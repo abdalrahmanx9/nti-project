@@ -4,7 +4,7 @@ param (
     [string]$Playbook = "jenkins_setup.yml"
 )
 
-Write-Host "Executing Ansible playbook '$Playbook' against Jenkins EC2 (98.86.85.33)..." -ForegroundColor Cyan
+Write-Host "Executing Ansible playbook '$Playbook' against Jenkins EC2 target..." -ForegroundColor Cyan
 
 docker run --rm -i `
   -v "${PWD}:/ansible" `

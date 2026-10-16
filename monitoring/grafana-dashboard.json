@@ -16,11 +16,11 @@
   "graphTooltip": 1,
   "id": null,
   "links": [],
-  "liveNow": false,
+  "liveNow": true,
   "panels": [
     {
       "collapsed": false,
-      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 0 },
       "id": 1,
       "title": "Application Health",
       "type": "stat",
@@ -49,29 +49,28 @@
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "gridPos": { "h": 4, "w": 5, "x": 4, "y": 0 },
       "id": 2,
-      "title": "Database Query Latency",
-      "type": "gauge",
+      "title": "Simulated Stress State",
+      "type": "stat",
       "datasource": "Prometheus",
       "targets": [
         {
-          "expr": "avg(app_db_query_duration_seconds * 1000)",
-          "legendFormat": "Latency (ms)",
+          "expr": "max(app_simulated_load_active) or vector(0)",
+          "legendFormat": "Stress Active",
           "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "ms",
-          "min": 0,
-          "max": 1000,
+          "mappings": [
+            { "options": { "0": { "color": "green", "text": "IDLE (Normal)" }, "1": { "color": "red", "text": "🔥 STRESS ACTIVE (>80%)" } }, "type": "value" }
+          ],
           "thresholds": {
             "mode": "absolute",
             "steps": [
               { "color": "green", "value": null },
-              { "color": "yellow", "value": 100 },
-              { "color": "red", "value": 500 }
+              { "color": "red", "value": 1 }
             ]
           }
         }
@@ -79,26 +78,56 @@
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "gridPos": { "h": 4, "w": 4, "x": 9, "y": 0 },
       "id": 3,
-      "title": "Active Replicas",
+      "title": "Active Pod Replicas",
       "type": "stat",
       "datasource": "Prometheus",
       "targets": [
         {
-          "expr": "count(kube_pod_status_phase{phase='Running', pod=~'nti-app.*'})",
-          "legendFormat": "Running Pods",
+          "expr": "sum(kube_deployment_status_replicas{deployment='nti-app'})",
+          "legendFormat": "Replicas",
           "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "thresholds" },
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "red", "value": null },
-              { "color": "green", "value": 2 }
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 3 },
+              { "color": "purple", "value": 5 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 4, "w": 5, "x": 13, "y": 0 },
+      "id": 4,
+      "title": "Database Query Latency",
+      "type": "gauge",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "avg(app_db_query_duration_seconds * 1000)",
+          "legendFormat": "Latency",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 50 },
+              { "color": "red", "value": 80 }
             ]
           }
         }
@@ -107,34 +136,41 @@
     {
       "collapsed": false,
       "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
-      "id": 4,
-      "title": "Throughput (req/s)",
+      "id": 5,
+      "title": "Total Stress Tests Run",
       "type": "stat",
       "datasource": "Prometheus",
       "targets": [
         {
-          "expr": "sum(rate(http_requests_total[2m]))",
-          "legendFormat": "Req/s",
+          "expr": "max(app_simulated_load_total) or vector(0)",
+          "legendFormat": "Stress Runs",
           "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "reqps",
-          "color": { "mode": "palette-classic" }
+          "unit": "short",
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "blue", "value": null },
+              { "color": "orange", "value": 1 }
+            ]
+          }
         }
       }
     },
     {
       "collapsed": false,
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
-      "id": 5,
-      "title": "Pod CPU Utilization (% of Limit) [Threshold: 80%]",
+      "id": 6,
+      "title": "Pod CPU Utilization (% of Limit) [80% Threshold]",
       "type": "timeseries",
       "datasource": "Prometheus",
       "targets": [
         {
-          "expr": "(sum(rate(container_cpu_usage_seconds_total{container='nti-app'}[2m])) by (pod) / sum(kube_pod_container_resource_limits{container='nti-app', resource='cpu'}) by (pod)) * 100",
+          "expr": "(sum(rate(container_cpu_usage_seconds_total{container='nti-app'}[30s])) by (pod) / sum(kube_pod_container_resource_limits{container='nti-app', resource='cpu'}) by (pod)) * 100",
           "legendFormat": "{{pod}} CPU %",
           "refId": "A"
         }
@@ -144,17 +180,19 @@
           "unit": "percent",
           "min": 0,
           "max": 100,
+          "custom": {
+            "fillOpacity": 25,
+            "lineWidth": 2,
+            "thresholdsStyle": {
+              "mode": "line"
+            }
+          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
               { "color": "green", "value": null },
               { "color": "red", "value": 80 }
             ]
-          },
-          "custom": {
-            "thresholdsStyle": {
-              "mode": "line"
-            }
           }
         }
       }
@@ -162,8 +200,8 @@
     {
       "collapsed": false,
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
-      "id": 6,
-      "title": "Pod RAM (Memory) Utilization (% of Limit) [Threshold: 80%]",
+      "id": 7,
+      "title": "Pod RAM (Memory) Utilization (% of Limit) [80% Threshold]",
       "type": "timeseries",
       "datasource": "Prometheus",
       "targets": [
@@ -178,28 +216,116 @@
           "unit": "percent",
           "min": 0,
           "max": 100,
+          "custom": {
+            "fillOpacity": 25,
+            "lineWidth": 2,
+            "thresholdsStyle": {
+              "mode": "line"
+            }
+          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
               { "color": "green", "value": null },
               { "color": "red", "value": 80 }
             ]
-          },
+          }
+        }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 12 },
+      "id": 8,
+      "title": "HPA Pod Auto-Scaling Timeline (2 -> 6 Replicas)",
+      "type": "timeseries",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "kube_deployment_status_replicas{deployment='nti-app'}",
+          "legendFormat": "Current Replicas",
+          "refId": "A"
+        },
+        {
+          "expr": "kube_horizontalpodautoscaler_status_desired_replicas{horizontalpodautoscaler='nti-app'}",
+          "legendFormat": "HPA Desired Replicas",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "max": 7,
           "custom": {
-            "thresholdsStyle": {
-              "mode": "line"
-            }
+            "lineWidth": 3,
+            "fillOpacity": 15,
+            "lineInterpolation": "stepAfter"
+          }
+        }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 12 },
+      "id": 9,
+      "title": "Raw Pod CPU Usage (Millicores mCPU)",
+      "type": "timeseries",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(rate(container_cpu_usage_seconds_total{container='nti-app'}[30s])) by (pod) * 1000",
+          "legendFormat": "{{pod}} mCPU",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 20,
+            "lineWidth": 2
+          }
+        }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 12 },
+      "id": 10,
+      "title": "Throughput & Request Rate (req/s)",
+      "type": "timeseries",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(rate(http_requests_total[30s]))",
+          "legendFormat": "Total Req/s",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "fillOpacity": 20,
+            "lineWidth": 2
           }
         }
       }
     }
   ],
-  "refresh": "10s",
+  "refresh": "5s",
   "schemaVersion": 38,
   "style": "dark",
-  "tags": ["nti", "devops", "kubernetes", "app"],
-  "time": { "from": "now-30m", "to": "now" },
+  "tags": ["nti", "devops", "kubernetes", "autoscaling", "hpa"],
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": ["5s", "10s", "30s", "1m", "5m"]
+  },
+  "timezone": "browser",
   "title": "NTI Production App - Infrastructure & Workload Dashboard",
-  "uid": "nti-devops-dashboard",
-  "version": 1
+  "version": 4
 }

@@ -1,37 +1,69 @@
-apiVersion: v1
-kind: Secret
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: AlertmanagerConfig
 metadata:
-  name: alertmanager-main
+  name: nti-devops-alerts
   namespace: monitoring
   labels:
-    app.kubernetes.io/name: alertmanager
-type: Opaque
-stringData:
-  alertmanager.yaml: |
-    global:
-      resolve_timeout: 5m
-      smtp_smarthost: 'smtp.mailgun.org:587'
-      smtp_from: 'alerts@nti-devops.com'
-
-    route:
-      group_by: ['alertname', 'cluster', 'service']
-      group_wait: 30s
-      group_interval: 5m
-      repeat_interval: 12h
-      receiver: 'devops-webhook'
-      routes:
-        - match:
-            severity: critical
-          receiver: 'devops-critical-webhook'
-          continue: true
-
-    receivers:
-      - name: 'devops-webhook'
-        webhook_configs:
-          - url: 'https://webhook.site/devops-alerts'
-            send_resolved: true
-
-      - name: 'devops-critical-webhook'
-        webhook_configs:
-          - url: 'https://webhook.site/devops-critical-alerts'
-            send_resolved: true
+    alertmanagerConfig: nti-alerts
+spec:
+  route:
+    groupBy: ['alertname', 'namespace', 'pod']
+    groupWait: 30s
+    groupInterval: 5m
+    repeatInterval: 3h
+    receiver: 'email-devops'
+    routes:
+      - matchers:
+          - name: alertname
+            value: Watchdog
+        receiver: 'null'
+  receivers:
+    - name: 'null'
+    - name: 'email-devops'
+      emailConfigs:
+        - to: 'devops-alerts@example.com'
+          from: 'devops-alerts@example.com'
+          smarthost: 'smtp.gmail.com:587'
+          authUsername: 'devops-alerts@example.com'
+          authPassword:
+            name: alertmanager-smtp-auth
+            key: password
+          requireTLS: true
+          sendResolved: true
+          headers:
+            - key: Subject
+              value: '🚨 [Alertmanager] {{ .Status | toUpper }}: {{ .CommonLabels.alertname }} ({{ .CommonLabels.severity | toUpper }})'
+          html: |
+            <!DOCTYPE html>
+            <html>
+            <body style="background-color:#0f172a;font-family:sans-serif;color:#f8fafc;padding:24px;">
+              <table style="max-width:600px;background:#1e293b;border-radius:10px;padding:24px;border:1px solid #334155;box-shadow:0 10px 20px rgba(0,0,0,0.4);" width="100%">
+                <tr>
+                  <td style="border-bottom:2px solid #ef4444;padding-bottom:12px;">
+                    <h2 style="margin:0;color:#ef4444;font-size:20px;">🚨 Prometheus Alert Triggered</h2>
+                    <span style="font-size:12px;color:#94a3b8;">NTI DevOps Monitoring &bull; AWS EKS</span>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:16px 0;">
+                    {{ range .Alerts }}
+                    <div style="background:#0f172a;border-radius:6px;padding:14px;margin-bottom:12px;border-left:4px solid {{ if eq .Labels.severity "critical" }}#ef4444{{ else }}#f59e0b{{ end }};">
+                      <h3 style="margin:0 0 6px 0;font-size:16px;color:#ffffff;">{{ .Labels.alertname }}</h3>
+                      <p style="margin:4px 0;font-size:13px;color:#94a3b8;"><b>Severity:</b> <span style="color:{{ if eq .Labels.severity "critical" }}#f87171{{ else }}#fbbf24{{ end }};">{{ .Labels.severity }}</span></p>
+                      <p style="margin:4px 0;font-size:13px;color:#94a3b8;"><b>Namespace:</b> {{ .Labels.namespace }}</p>
+                      <p style="margin:4px 0;font-size:13px;color:#94a3b8;"><b>Pod:</b> {{ .Labels.pod }}</p>
+                      <p style="margin:8px 0 0 0;font-size:13px;color:#e2e8f0;background:#1e293b;padding:8px;border-radius:4px;">{{ .Annotations.description }}</p>
+                    </div>
+                    {{ end }}
+                  </td>
+                </tr>
+                <tr>
+                  <td align="center" style="padding-top:10px;">
+                    <a href="http://nti.d7m.uk" target="_blank" style="background:#3b82f6;color:#ffffff;text-decoration:none;padding:10px 24px;border-radius:6px;font-size:13px;font-weight:600;display:inline-block;">
+                      Open Production App &rarr;
+                    </a>
+                  </td>
+                </tr>
+              </table>
+            </body>
+            </html>

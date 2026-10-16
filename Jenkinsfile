@@ -148,7 +148,10 @@ pipeline {
             echo '========================================================='
         }
         failure {
-            echo 'Pipeline execution failed. Please check the stage logs above.'
+            echo '=== Pipeline Execution Failed! Dispatching HTML Alert Email ==='
+            sh '''
+                python3 scripts/send_failure_email.py || true
+            '''
         }
     }
 }

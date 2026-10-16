@@ -161,32 +161,32 @@ async def api_db_query(request: Request):
     return result
 
 # Background load simulator for testing CPU/RAM alerts (> 80%)
-def run_cpu_ram_stress(duration_seconds: int = 15):
+def run_cpu_ram_stress(duration_seconds: int = 45):
     SIMULATED_LOAD_ACTIVE.set(1)
     SIMULATED_LOAD_TOTAL.inc()
     try:
         end_time = time.time() + duration_seconds
-        # Allocate ~120MB memory buffer to raise memory usage
-        mem_buffer = bytearray(120 * 1024 * 1024)
+        # Allocate ~220MB memory buffer to push container RAM towards limit
+        mem_buffer = bytearray(220 * 1024 * 1024)
+        # Intense CPU burn across workers
         while time.time() < end_time:
-            # CPU intensive tight loop
-            _ = [x ** 2 for x in range(50000)]
-            time.sleep(0.001)
+            # Heavy mathematical loop to max out CPU
+            _ = [x ** 2 for x in range(200000)]
         del mem_buffer
     finally:
         SIMULATED_LOAD_ACTIVE.set(0)
 
 class LoadRequest(BaseModel):
-    duration_seconds: int = 15
+    duration_seconds: int = 45
 
 @app.post("/api/simulate-load")
 async def simulate_load(payload: LoadRequest, background_tasks: BackgroundTasks):
     """Simulates CPU & Memory usage spike to test Prometheus > 80% alerting rules"""
-    duration = min(max(payload.duration_seconds, 5), 60)
+    duration = min(max(payload.duration_seconds, 10), 120)
     background_tasks.add_task(run_cpu_ram_stress, duration)
     return {
         "success": True,
-        "message": f"Simulated CPU & RAM load initiated for {duration} seconds. Check Prometheus/Grafana!",
+        "message": f"Simulated CPU & RAM load initiated for {duration} seconds. Watch Prometheus & Grafana react!",
         "duration_seconds": duration
     }
 

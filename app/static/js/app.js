@@ -139,25 +139,28 @@ elements.btnStressTest.addEventListener('click', async () => {
         const res = await fetch('/api/simulate-load', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ duration_seconds: 15 })
+            body: JSON.stringify({ duration_seconds: 45 })
         });
         const json = await res.json();
         elements.stressFeedback.className = 'feedback-msg success';
         elements.stressFeedback.textContent = json.message;
         elements.stressFeedback.classList.remove('hidden');
-        appendLog(`Simulated CPU & RAM load triggered for 15s. Monitoring thresholds...`, 'STRESS');
+        appendLog(`Simulated CPU & RAM load initiated for 45s (Target: >80% threshold).`, 'STRESS');
 
-        // Countdown button state
-        let timeLeft = 15;
+        // Countdown button state & immediate alarm pill
+        elements.alarmStatusPill.className = 'pill-firing';
+        elements.alarmStatusPill.textContent = 'ALARM TRIGGERED (>80%)';
+
+        let timeLeft = 45;
         const interval = setInterval(() => {
             timeLeft--;
-            elements.btnStressTest.textContent = `Simulating Load (${timeLeft}s remaining)...`;
+            elements.btnStressTest.textContent = `🔥 Simulating Load (${timeLeft}s remaining)...`;
             if (timeLeft <= 0) {
                 clearInterval(interval);
                 elements.btnStressTest.textContent = 'Simulate Load (>80% Stress)';
                 elements.btnStressTest.disabled = false;
                 elements.spinnerStress.classList.add('hidden');
-                appendLog(`Simulated load window completed. Resources returning to baseline.`, 'INFO');
+                appendLog(`Simulated load window completed. Cooldown stabilization active.`, 'INFO');
             }
         }, 1000);
 
