@@ -1,0 +1,147 @@
+pipeline {
+    agent any
+
+    options {
+        timeout(time: 60, unit: 'MINUTES')
+        buildDiscarder(logRotator(numToKeepStr: '15'))
+        disableConcurrentBuilds()
+        ansiColor('xterm')
+    }
+
+    parameters {
+        choice(
+            name: 'TERRAFORM_ACTION',
+            choices: ['plan-and-apply', 'plan-only', 'destroy'],
+            description: 'Select Terraform operational workflow. "plan-and-apply" pauses for manual approval before applying.'
+        )
+        booleanParam(
+            name: 'AUTO_APPROVE',
+            defaultValue: false,
+            description: 'Check to skip interactive manual approval prompt (only for automated CI runs).'
+        )
+    }
+
+    environment {
+        AWS_DEFAULT_REGION = 'us-east-1'
+        TF_IN_AUTOMATION    = 'true'
+        TF_CLI_ARGS         = '-no-color'
+    }
+
+    stages {
+        stage('1. Checkout SCM') {
+            steps {
+                echo '=== Checking out infrastructure code ==='
+                checkout scm
+            }
+        }
+
+        stage('2. Prepare Environment & Init') {
+            steps {
+                dir('terraform') {
+                    echo '=== Preparing terraform.tfvars & Initializing S3 Remote Backend ==='
+                    sh '''
+                        if [ ! -f terraform.tfvars ]; then
+                            echo "Creating terraform.tfvars from template..."
+                            cp terraform.tfvars.example terraform.tfvars
+                        fi
+
+                        echo "Terraform CLI Version:"
+                        terraform version
+
+                        echo "Initializing Remote S3 Backend..."
+                        terraform init -input=false
+                    '''
+                }
+            }
+        }
+
+        stage('3. Terraform Validate & Lint') {
+            steps {
+                dir('terraform') {
+                    echo '=== Validating Terraform Configuration Syntax ==='
+                    sh '''
+                        terraform validate
+                    '''
+                }
+            }
+        }
+
+        stage('4. Terraform Plan') {
+            steps {
+                dir('terraform') {
+                    echo '=== Generating Terraform Execution Plan ==='
+                    sh '''
+                        if [ "${params.TERRAFORM_ACTION}" = "destroy" ]; then
+                            echo "Generating DESTROY plan..."
+                            terraform plan -destroy -out=tfplan
+                        else
+                            echo "Generating Standard APPLY plan..."
+                            terraform plan -out=tfplan
+                        fi
+                    '''
+                }
+            }
+        }
+
+        stage('5. Manual Approval Gate') {
+            when {
+                expression {
+                    return params.TERRAFORM_ACTION != 'plan-only' && !params.AUTO_APPROVE
+                }
+            }
+            steps {
+                timeout(time: 30, unit: 'MINUTES') {
+                    script {
+                        def actionLabel = params.TERRAFORM_ACTION == 'destroy' ? 'DESTROY' : 'APPLY'
+                        echo "===================================================================="
+                        echo " PAUSED: Waiting for Manual Approval to execute Terraform ${actionLabel}"
+                        echo " Review the execution plan output in Stage 4 before proceeding!"
+                        echo "===================================================================="
+                        input(
+                            id: 'ProceedWithTerraform',
+                            message: "Do you approve executing 'terraform ${actionLabel}' on AWS production infrastructure?",
+                            ok: "Approve & Execute ${actionLabel}",
+                            submitterParameter: 'APPROVER_USER'
+                        )
+                    }
+                }
+            }
+        }
+
+        stage('6. Terraform Execute') {
+            when {
+                expression {
+                    return params.TERRAFORM_ACTION != 'plan-only'
+                }
+            }
+            steps {
+                dir('terraform') {
+                    echo '=== Applying Terraform Plan to AWS Infrastructure ==='
+                    sh '''
+                        terraform apply -input=false tfplan
+                    '''
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            dir('terraform') {
+                echo '=== Cleaning up local plan artifacts ==='
+                sh 'rm -f tfplan || true'
+            }
+        }
+        success {
+            echo '========================================================='
+            echo ' Terraform Pipeline Execution Completed Successfully!    '
+            echo '========================================================='
+        }
+        failure {
+            echo '=== Terraform Pipeline Failed! Dispatching HTML Alert Email ==='
+            sh '''
+                python3 scripts/send_failure_email.py || true
+            '''
+        }
+    }
+}
