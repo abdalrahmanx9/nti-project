@@ -1,0 +1,25 @@
+{{- if .Values.gateway.enabled -}}
+# Kubernetes Gateway API: Gateway Resource
+# Defines the entry point for network traffic into the cluster.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: {{ include "nti-app.fullname" . }}-gateway
+  labels:
+    {{- include "nti-app.labels" . | nindent 4 }}
+  {{- with .Values.gateway.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  gatewayClassName: {{ .Values.gateway.className | default "amazon-vpc-lattice" }}
+  listeners:
+    {{- range .Values.gateway.listeners }}
+    - name: {{ .name }}
+      port: {{ .port }}
+      protocol: {{ .protocol }}
+      allowedRoutes:
+        namespaces:
+          from: Same
+    {{- end }}
+{{- end }}

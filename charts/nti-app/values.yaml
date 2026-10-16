@@ -1,0 +1,125 @@
+# Default values for nti-app Helm Chart.
+# This is a YAML-formatted file.
+
+replicaCount: 2
+
+image:
+  repository: 270485099284.dkr.ecr.us-east-1.amazonaws.com/nti-devops-app
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations:
+    eks.amazonaws.com/role-arn: ""
+  name: "nti-app-sa"
+
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/path: "/metrics"
+  prometheus.io/port: "8000"
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  capabilities:
+    drop:
+      - ALL
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8000
+
+# Modern Kubernetes Gateway API Configuration (replacing legacy Ingress)
+gateway:
+  enabled: true
+  className: "amazon-vpc-lattice" # AWS Gateway API controller or Envoy Gateway
+  annotations: {}
+  listeners:
+    - name: http
+      port: 80
+      protocol: HTTP
+  route:
+    path: /
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 75
+  targetMemoryUtilizationPercentage: 80
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - nti-app
+          topologyKey: "topology.kubernetes.io/zone"
+
+# Application runtime environment variables
+env:
+  - name: APP_ENV
+    value: "production"
+  - name: PORT
+    value: "8000"
+  - name: DB_HOST
+    value: "production-postgres-db.c87k8amw6ab1.us-east-1.rds.amazonaws.com"
+  - name: DB_PORT
+    value: "5432"
+  - name: DB_NAME
+    value: "appdb"
+  - name: DB_USER
+    value: "dbadmin"
+
+# Database Secret configuration (retrieved from AWS Secrets Manager or pre-existing Secret)
+databaseSecret:
+  name: "nti-app-db-secret"
+  passwordKey: "password"
+
+# Liveness and Readiness Probes
+probes:
+  liveness:
+    httpGet:
+      path: /health
+      port: 8000
+    initialDelaySeconds: 15
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readiness:
+    httpGet:
+      path: /health
+      port: 8000
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 2
