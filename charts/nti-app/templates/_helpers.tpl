@@ -31,7 +31,7 @@ helm.sh/chart: {{ include "nti-app.chart" . }}
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 {{- end }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
-environment: {{ .Values.env | default "production" }}
+environment: {{ .Values.environment | default "production" }}
 {{- end }}
 
 {{/*

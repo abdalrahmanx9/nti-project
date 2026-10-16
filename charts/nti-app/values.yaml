@@ -105,6 +105,12 @@ databaseSecret:
   name: "nti-app-db-secret"
   passwordKey: "password"
 
+# AWS Secrets Manager & External Secrets Operator integration
+secretsManager:
+  enabled: false
+  secretName: "production-rds-secret"
+  region: "us-east-1"
+
 # Liveness and Readiness Probes
 probes:
   liveness:
