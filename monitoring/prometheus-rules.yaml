@@ -35,7 +35,7 @@ spec:
 
         # Alert 3: Database Latency Spike > 500ms
         - alert: DatabaseQueryLatencyHigh
-          expr: app_database_query_latency_seconds > 0.5
+          expr: app_db_query_duration_seconds > 0.5
           for: 2m
           labels:
             severity: critical
@@ -44,9 +44,9 @@ spec:
             summary: "RDS PostgreSQL query latency spike"
             description: "Application database ping/query latency is exceeding 500ms (current latency: {{ $value | printf \"%.4f\" }}s)."
 
-        # Alert 4: Application Health Probe Failing
+        # Alert 4: Application Database Disconnected / Failing
         - alert: AppHealthCheckFailing
-          expr: probe_success{instance=~".*nti-app.*"} == 0
+          expr: app_db_connected == 0
           for: 1m
           labels:
             severity: critical
