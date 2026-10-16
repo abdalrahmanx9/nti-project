@@ -1,0 +1,36 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: nti-app
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: nti-app
+    app.kubernetes.io/part-of: nti-devops-platform
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  # Dedicated GitOps repository separated from the app source code repo
+  source:
+    repoURL: https://github.com/abdalrahmanx9/nti-devops-gitops.git
+    targetRevision: main
+    path: charts/nti-app
+    helm:
+      valueFiles:
+        - values.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ApplyOutOfSyncOnly=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
