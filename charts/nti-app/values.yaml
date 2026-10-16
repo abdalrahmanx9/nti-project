@@ -96,7 +96,7 @@ env:
   - name: DB_PORT
     value: "5432"
   - name: DB_NAME
-    value: "appdb"
+    value: "ntiapp"
   - name: DB_USER
     value: "dbadmin"
 
@@ -115,7 +115,7 @@ secretsManager:
 probes:
   liveness:
     httpGet:
-      path: /health
+      path: /healthz
       port: 8000
     initialDelaySeconds: 15
     periodSeconds: 10
@@ -123,7 +123,7 @@ probes:
     failureThreshold: 3
   readiness:
     httpGet:
-      path: /health
+      path: /healthz
       port: 8000
     initialDelaySeconds: 5
     periodSeconds: 5

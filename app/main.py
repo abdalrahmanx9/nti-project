@@ -123,10 +123,13 @@ async def dashboard(request: Request):
         context={"data": telemetry}
     )
 
+@app.api_route("/health", methods=["GET", "HEAD"])
 @app.api_route("/healthz", methods=["GET", "HEAD"])
 async def healthz():
     """Kubernetes liveness and readiness probe"""
     db_healthy, db_latency_ms, db_msg = await check_db_health()
+    DB_CONNECTED.set(1 if db_healthy else 0)
+    DB_QUERY_DURATION_SECONDS.set(db_latency_ms / 1000.0)
     status = "healthy" if db_healthy else "degraded"
     status_code = 200  # Return 200 so pod stays alive even during DB warmup/maintenance
     return JSONResponse(
