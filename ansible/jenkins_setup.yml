@@ -1,0 +1,260 @@
+---
+- name: Setup Jenkins Server & Complete DevOps Toolchain
+  hosts: jenkins_servers
+  become: true
+  vars:
+    jenkins_cli_url: "http://localhost:8080/jnlpJars/jenkins-cli.jar"
+    jenkins_cli_dest: "/opt/jenkins-cli.jar"
+    jenkins_plugins:
+      - git
+      - workflow-aggregator
+      - github-branch-source
+      - sonar
+      - docker-workflow
+      - amazon-ecr
+      - pipeline-stage-view
+      - credentials-binding
+
+  tasks:
+    - name: Clean up any stale Jenkins files from previous attempts
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/apt/sources.list.d/jenkins.list
+        - /usr/share/keyrings/jenkins-keyring.asc
+        - /etc/apt/keyrings/jenkins-keyring.asc
+
+    - name: Clean up any stale Jenkins entry from sources.list if present
+      lineinfile:
+        path: /etc/apt/sources.list
+        regexp: '.*pkg\.jenkins\.io.*'
+        state: absent
+
+    - name: Update apt cache and install base dependencies
+      apt:
+        update_cache: yes
+        pkg:
+          - curl
+          - gnupg2
+          - software-properties-common
+          - apt-transport-https
+          - ca-certificates
+          - git
+          - unzip
+          - jq
+          - tar
+        state: present
+
+    # 1. Install Java 21 (Required by modern Jenkins LTS)
+    - name: Install OpenJDK 21
+      apt:
+        name: openjdk-21-jdk
+        state: present
+
+    # 2. Add Official Jenkins Repository & Install Jenkins
+    - name: Ensure /usr/share/keyrings directory exists
+      file:
+        path: /usr/share/keyrings
+        state: directory
+        mode: '0755'
+
+    - name: Download Jenkins GPG Key (2026 key)
+      get_url:
+        url: https://pkg.jenkins.io/debian-stable/jenkins.io-2026.key
+        dest: /usr/share/keyrings/jenkins-keyring.asc
+        mode: '0644'
+        force: yes
+
+    - name: Add Jenkins APT repository list
+      copy:
+        content: "deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc] https://pkg.jenkins.io/debian-stable binary/\n"
+        dest: /etc/apt/sources.list.d/jenkins.list
+        mode: '0644'
+
+    - name: Install Jenkins LTS
+      apt:
+        name: jenkins
+        state: present
+        update_cache: yes
+
+    - name: Reset any failed state and reload systemd
+      systemd:
+        daemon_reload: yes
+
+    - name: Reset failed status for jenkins if any
+      command: systemctl reset-failed jenkins
+      ignore_errors: yes
+      changed_when: false
+
+    - name: Ensure Jenkins service is started and enabled
+      systemd:
+        name: jenkins
+        state: started
+        enabled: yes
+
+    # 3. Install Docker Engine
+    - name: Ensure /etc/apt/keyrings directory exists
+      file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: '0755'
+
+    - name: Download Docker official GPG key
+      get_url:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        dest: /etc/apt/keyrings/docker.asc
+        mode: '0644'
+
+    - name: Add Docker APT repository list
+      copy:
+        content: "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable\n"
+        dest: /etc/apt/sources.list.d/docker.list
+        mode: '0644'
+
+    - name: Install Docker CE components
+      apt:
+        pkg:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+        state: present
+        update_cache: yes
+
+    - name: Ensure Docker service is running and enabled
+      systemd:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Add jenkins and ubuntu users to docker group
+      user:
+        name: "{{ item }}"
+        groups: docker
+        append: yes
+      loop:
+        - jenkins
+        - ubuntu
+
+    # 4. Install AWS CLI v2
+    - name: Check if AWS CLI is installed
+      command: aws --version
+      register: aws_cli_check
+      ignore_errors: yes
+      changed_when: false
+
+    - name: Install AWS CLI v2 if absent
+      when: aws_cli_check.rc != 0
+      block:
+        - name: Download AWS CLI bundle
+          get_url:
+            url: "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip"
+            dest: "/tmp/awscliv2.zip"
+
+        - name: Unarchive AWS CLI bundle
+          unarchive:
+            src: "/tmp/awscliv2.zip"
+            dest: "/tmp"
+            remote_src: yes
+
+        - name: Run AWS CLI installer
+          command: "/tmp/aws/install"
+
+    # 5. Install kubectl
+    - name: Check if kubectl is installed
+      command: kubectl version --client
+      register: kubectl_check
+      ignore_errors: yes
+      changed_when: false
+
+    - name: Install kubectl if absent
+      when: kubectl_check.rc != 0
+      get_url:
+        url: "https://dl.k8s.io/release/v1.30.0/bin/linux/amd64/kubectl"
+        dest: "/usr/local/bin/kubectl"
+        mode: '0755'
+
+    # 6. Install Helm v3
+    - name: Check if Helm is installed
+      command: helm version
+      register: helm_check
+      ignore_errors: yes
+      changed_when: false
+
+    - name: Install Helm v3 if absent
+      when: helm_check.rc != 0
+      shell: "curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash"
+
+    # 7. Install Trivy (Container Vulnerability Scanner)
+    - name: Download Trivy public signing key
+      get_url:
+        url: https://aquasecurity.github.io/trivy-repo/deb/public.key
+        dest: /etc/apt/keyrings/trivy.asc
+        mode: '0644'
+
+    - name: Add Trivy APT repository list
+      copy:
+        content: "deb [signed-by=/etc/apt/keyrings/trivy.asc] https://aquasecurity.github.io/trivy-repo/deb generic main\n"
+        dest: /etc/apt/sources.list.d/trivy.list
+        mode: '0644'
+
+    - name: Install Trivy
+      apt:
+        name: trivy
+        state: present
+        update_cache: yes
+
+    # 8. Automated Jenkins Plugin Installation
+    - name: Wait for Jenkins port 8080 to become available
+      wait_for:
+        port: 8080
+        delay: 15
+        timeout: 120
+
+    - name: Wait for Jenkins initial admin password file
+      wait_for:
+        path: /var/lib/jenkins/secrets/initialAdminPassword
+        timeout: 60
+
+    - name: Read Jenkins Initial Admin Password
+      slurp:
+        src: /var/lib/jenkins/secrets/initialAdminPassword
+      register: initial_admin_password_raw
+
+    - name: Set initial admin password fact
+      set_fact:
+        jenkins_admin_password: "{{ initial_admin_password_raw.content | b64decode | trim }}"
+
+    - name: Download Jenkins CLI jar
+      get_url:
+        url: "{{ jenkins_cli_url }}"
+        dest: "{{ jenkins_cli_dest }}"
+        mode: '0755'
+
+    - name: Install required Jenkins plugins via CLI
+      command: >
+        java -jar {{ jenkins_cli_dest }} -s http://localhost:8080/
+        -auth admin:{{ jenkins_admin_password }}
+        install-plugin {{ item }} -deploy
+      loop: "{{ jenkins_plugins }}"
+      register: plugin_install_res
+      changed_when: "'Installed' in plugin_install_res.stdout or plugin_install_res.rc == 0"
+      retries: 3
+      delay: 5
+      until: plugin_install_res.rc == 0
+      ignore_errors: yes
+
+    - name: Restart Jenkins to apply plugins
+      systemd:
+        name: jenkins
+        state: restarted
+
+    - name: Display Jenkins Setup Credentials
+      debug:
+        msg:
+          - "=========================================================="
+          - " Jenkins has been successfully installed and configured!   "
+          - " URL: http://{{ ansible_host }}:8080                      "
+          - " Initial Admin Password: {{ jenkins_admin_password }}     "
+          - " Installed Toolchain: Docker, AWS CLI v2, kubectl, Helm, Trivy "
+          - "=========================================================="

@@ -1,0 +1,56 @@
+---
+- name: Install & Configure AWS CloudWatch Agent across all EC2 instances
+  hosts: all_ec2
+  become: true
+  vars:
+    cw_deb_url: "https://amazoncloudwatch-agent.s3.amazonaws.com/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb"
+    cw_deb_path: "/tmp/amazon-cloudwatch-agent.deb"
+    cw_config_dest: "/opt/aws/amazon-cloudwatch-agent/bin/config.json"
+
+  tasks:
+    - name: Download Amazon CloudWatch Agent deb package
+      get_url:
+        url: "{{ cw_deb_url }}"
+        dest: "{{ cw_deb_path }}"
+        mode: '0644'
+
+    - name: Install CloudWatch Agent deb package
+      apt:
+        deb: "{{ cw_deb_path }}"
+        state: present
+
+    - name: Deploy CloudWatch Agent metrics and log streaming configuration
+      copy:
+        src: files/amazon-cloudwatch-agent.json
+        dest: "{{ cw_config_dest }}"
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Start and enable Amazon CloudWatch Agent service with configuration
+      command: >
+        /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl
+        -a fetch-config
+        -m ec2
+        -s
+        -c file:{{ cw_config_dest }}
+      register: cw_agent_start
+      changed_when: "'Successfully fetched the config' in cw_agent_start.stdout or cw_agent_start.rc == 0"
+
+    - name: Verify CloudWatch Agent service status
+      command: >
+        /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl
+        -m ec2
+        -a status
+      register: cw_status
+      changed_when: false
+
+    - name: Display CloudWatch Agent Status
+      debug:
+        msg:
+          - "=========================================================="
+          - " CloudWatch Agent is ACTIVE and collecting telemetry!       "
+          - " Log Groups: /aws/ec2/jenkins, /aws/ec2/system            "
+          - " Metrics: CPU, RAM, Disk utilization every 60s             "
+          - " Status Output: {{ cw_status.stdout }}                     "
+          - "=========================================================="
