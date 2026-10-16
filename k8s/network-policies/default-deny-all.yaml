@@ -1,0 +1,13 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: default
+  labels:
+    app.kubernetes.io/managed-by: helm
+    security.nti.devops/policy: zero-trust
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
