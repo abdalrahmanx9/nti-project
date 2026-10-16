@@ -1,0 +1,61 @@
+# Security & Credentials (CRITICAL for Public Repositories)
+*.pem
+*.key
+*.pub
+*.pfx
+*.pkcs12
+*.crt
+id_rsa*
+*.id_rsa
+*.ssh/
+.env
+.env.*
+*.credentials
+*initialAdminPassword*
+
+# Terraform Local State & Variables
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+*.tfvars
+*.tfvars.json
+!terraform.tfvars.example
+
+# Ansible Temporary Files
+*.retry
+.ansible/
+ansible_cache/
+
+# Python & UV Environments
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# Docker Local Temp
+.docker/
+
+# Logs & Temporary Files
+*.log
+/tmp/
+/temp/
+
+# IDE & Operating System
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db

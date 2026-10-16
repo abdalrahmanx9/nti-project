@@ -1,0 +1,57 @@
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: nti-devops-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ntiapp
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ntiapp"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - nti-network
+
+  app:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    container_name: nti-devops-app
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      APP_ENV: local-compose
+      HOST: 0.0.0.0
+      PORT: 8000
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: ntiapp
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/ntiapp
+      POD_NAME: local-compose-container
+      POD_IP: 172.28.0.3
+      NODE_NAME: docker-desktop
+      NAMESPACE: local
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - nti-network
+
+volumes:
+  postgres_data:
+    name: nti_postgres_data
+
+networks:
+  nti-network:
+    name: nti_devops_network
+    driver: bridge
