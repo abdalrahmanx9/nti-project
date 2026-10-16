@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: alertmanager-main
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: alertmanager
+type: Opaque
+stringData:
+  alertmanager.yaml: |
+    global:
+      resolve_timeout: 5m
+      smtp_smarthost: 'smtp.mailgun.org:587'
+      smtp_from: 'alerts@nti-devops.com'
+
+    route:
+      group_by: ['alertname', 'cluster', 'service']
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 12h
+      receiver: 'devops-webhook'
+      routes:
+        - match:
+            severity: critical
+          receiver: 'devops-critical-webhook'
+          continue: true
+
+    receivers:
+      - name: 'devops-webhook'
+        webhook_configs:
+          - url: 'https://webhook.site/devops-alerts'
+            send_resolved: true
+
+      - name: 'devops-critical-webhook'
+        webhook_configs:
+          - url: 'https://webhook.site/devops-critical-alerts'
+            send_resolved: true

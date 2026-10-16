@@ -1,0 +1,56 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: nti-app-alerts
+  namespace: monitoring
+  labels:
+    role: alert-rules
+    prometheus: k8s
+    app.kubernetes.io/name: nti-app
+spec:
+  groups:
+    - name: nti-app.rules
+      rules:
+        # Alert 1: CPU Utilization > 80% for 5 minutes
+        - alert: PodCPUUsageOver80Percent
+          expr: (sum(rate(container_cpu_usage_seconds_total{container="nti-app"}[2m])) by (pod, namespace) / sum(kube_pod_container_resource_limits{container="nti-app", resource="cpu"}) by (pod, namespace)) * 100 > 80
+          for: 5m
+          labels:
+            severity: warning
+            team: devops
+          annotations:
+            summary: "High CPU usage on pod {{ $labels.pod }}"
+            description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has exceeded 80% CPU utilization threshold for > 5 minutes (current value: {{ $value | printf \"%.2f\" }}%)."
+
+        # Alert 2: Memory (RAM) Utilization > 80% for 5 minutes
+        - alert: PodMemoryUsageOver80Percent
+          expr: (sum(container_memory_working_set_bytes{container="nti-app"}) by (pod, namespace) / sum(kube_pod_container_resource_limits{container="nti-app", resource="memory"}) by (pod, namespace)) * 100 > 80
+          for: 5m
+          labels:
+            severity: warning
+            team: devops
+          annotations:
+            summary: "High Memory usage on pod {{ $labels.pod }}"
+            description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has exceeded 80% RAM utilization threshold for > 5 minutes (current value: {{ $value | printf \"%.2f\" }}%)."
+
+        # Alert 3: Database Latency Spike > 500ms
+        - alert: DatabaseQueryLatencyHigh
+          expr: app_database_query_latency_seconds > 0.5
+          for: 2m
+          labels:
+            severity: critical
+            team: database
+          annotations:
+            summary: "RDS PostgreSQL query latency spike"
+            description: "Application database ping/query latency is exceeding 500ms (current latency: {{ $value | printf \"%.4f\" }}s)."
+
+        # Alert 4: Application Health Probe Failing
+        - alert: AppHealthCheckFailing
+          expr: probe_success{instance=~".*nti-app.*"} == 0
+          for: 1m
+          labels:
+            severity: critical
+            team: devops
+          annotations:
+            summary: "NTI application liveness/readiness probe failure"
+            description: "Health checks are failing on instance {{ $labels.instance }}."
