@@ -18,6 +18,13 @@ pipeline {
         ansiColor('xterm')
     }
 
+    triggers {
+        // Trigger immediately on GitHub webhook push notifications
+        githubPush()
+        // Fallback polling every 2 minutes
+        pollSCM('H/2 * * * *')
+    }
+
     stages {
         stage('1. Checkout SCM') {
             steps {
