@@ -37,7 +37,7 @@ variable "eks_node_instance_types" {
 variable "eks_desired_nodes" {
   description = "Desired number of worker nodes in EKS Auto Scaling Group"
   type        = number
-  default     = 2
+  default     = 3
 }
 
 variable "eks_min_nodes" {
