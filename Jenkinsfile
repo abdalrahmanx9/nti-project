@@ -122,11 +122,12 @@ pipeline {
                         set -e
                         echo "Target Image Tag: ${IMAGE_TAG}"
                         rm -rf gitops-repo
-                        git clone "https://\${GITOPS_PAT}@github.com/abdalrahmanx9/nti-devops-gitops.git" gitops-repo
+                        git clone "https://x-access-token:\${GITOPS_PAT}@github.com/abdalrahmanx9/nti-devops-gitops.git" gitops-repo
                         cd gitops-repo
 
                         git config user.name "jenkins-ci-bot"
                         git config user.email "jenkins-ci@nti.local"
+                        git remote set-url origin "https://x-access-token:\${GITOPS_PAT}@github.com/abdalrahmanx9/nti-devops-gitops.git"
 
                         sed -i 's/tag: .*/tag: "${IMAGE_TAG}"/' charts/nti-app/values.yaml
 
