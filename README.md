@@ -118,9 +118,49 @@ The system is designed with a strict separation between **Application Source Cod
 ├── scripts/                    # Automation Scripts
 │   └── send_failure_email.py   # Python HTML email sender for Jenkins pipeline failures
 │
-├── Jenkinsfile                 # 7-Stage Declarative CI/CD Pipeline with HTML alert notifications
+├── Jenkinsfile                 # Application CI/CD Pipeline (Lint, Pytest, Docker, Trivy, ECR, GitOps)
+├── Jenkinsfile.terraform       # Infrastructure CI/CD Pipeline (Init, Validate, Plan, Manual Approval Gate, Apply)
 └── docker-compose.yml          # Local multi-container development environment
 ```
+
+---
+
+## 🛠️ Infrastructure CI/CD Pipeline (Terraform + Manual Approval Gate)
+
+Infrastructure is managed via a dedicated, automated Jenkins pipeline ([Jenkinsfile.terraform](Jenkinsfile.terraform)) registered under the **`nti-terraform-pipeline`** job. To prevent accidental drift or unintended destruction of production cloud resources, the pipeline enforces an **Interactive Manual Approval Gate** before any changes are applied.
+
+```
++---------------------------------------------------------------------------------------------------+
+|                            Terraform CI/CD Pipeline (Jenkins Host)                                |
+|                                                                                                   |
+|  [1. Checkout SCM]  -->  [2. Prepare & Init]  -->  [3. Validate & Lint]  -->  [4. Terraform Plan] |
+|                                                                                       |           |
+|                                                                                       v           |
+|  [Post-Actions]     <--  [6. Terraform Apply] <-- [5. Interactive Manual Approval Gate]           |
+|  - Cleanup tfplan        - Runs only if approved     - Pauses up to 30 minutes                    |
+|  - Error alerts          - Uses binary plan file     - Operator reviews execution plan            |
++---------------------------------------------------------------------------------------------------+
+```
+
+### Pipeline Workflow & Parameters
+When running **`nti-terraform-pipeline`** in Jenkins:
+1. **`TERRAFORM_ACTION` Parameter**:
+   - `plan-and-apply` *(Default)*: Runs `terraform init`, `validate`, generates an execution plan, **pauses for manual operator sign-off**, and applies upon approval.
+   - `plan-only`: Generates and prints the execution plan without executing changes or pausing for approval.
+   - `destroy`: Generates a destruction plan, pauses for explicit operator confirmation, and tears down infrastructure safely.
+2. **`AUTO_APPROVE` Parameter**:
+   - `false` *(Default)*: Enforces the human-in-the-loop manual approval modal in Jenkins.
+   - `true`: Bypasses the approval gate for non-interactive CI testing environments.
+
+### How to Execute & Approve Infrastructure Changes
+1. Navigate to Jenkins: **`http://<JENKINS_HOST>:8080/job/nti-terraform-pipeline/`**.
+2. Click **Build with Parameters** in the left sidebar.
+3. Select your desired `TERRAFORM_ACTION` and click **Build**.
+4. In **Stage 4 (Terraform Plan)**, inspect the output in the console log to review planned adds, changes, or deletions.
+5. In **Stage 5 (Manual Approval Gate)**:
+   - Jenkins pauses execution and highlights the stage in yellow with an interactive prompt:
+     > *"Do you approve executing 'terraform APPLY' on AWS production infrastructure?"*
+   - Click **Approve & Execute** to apply the plan, or click **Abort** to discard changes without touching AWS.
 
 ---
 
