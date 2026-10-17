@@ -34,10 +34,8 @@ const elements = {
     btnDispatchTest: document.getElementById('btn-dispatch-test'),
     spinnerDispatch: document.getElementById('spinner-dispatch'),
     trafficResultsContainer: document.getElementById('traffic-results-container'),
-    barPodA: document.getElementById('bar-pod-a'),
-    barPodB: document.getElementById('bar-pod-b'),
-    labelPodA: document.getElementById('label-pod-a'),
-    labelPodB: document.getElementById('label-pod-b'),
+    dispatcherSplitBar: document.getElementById('dispatcher-split-bar'),
+    dispatcherLabelsRow: document.getElementById('dispatcher-labels-row'),
     telemetryCanvas: document.getElementById('telemetry-chart'),
     btnOpenTopology: document.getElementById('btn-open-topology'),
     btnCloseTopology: document.getElementById('btn-close-topology'),
@@ -47,6 +45,34 @@ const elements = {
 // ponytail: initialize from server-rendered DOM so we know the session pod immediately
 const sessionServingPod = elements.podDisplay ? elements.podDisplay.textContent.trim() : null;
 let previousPodName = sessionServingPod;
+
+const discoveredReplicas = new Set();
+if (sessionServingPod) discoveredReplicas.add(sessionServingPod);
+
+const POD_PALETTES = [
+    { bg: 'linear-gradient(90deg, #3b82f6, #06b6d4)', text: '#7fb0fa' },  // Pod 1: Blue-Cyan
+    { bg: 'linear-gradient(90deg, #8b5cf6, #ec4899)', text: '#c4b5fd' },  // Pod 2: Violet-Rose
+    { bg: 'linear-gradient(90deg, #10b981, #14b8a6)', text: '#6ee7b7' },  // Pod 3: Emerald-Teal
+    { bg: 'linear-gradient(90deg, #f59e0b, #f97316)', text: '#fcd34d' },  // Pod 4: Amber-Orange
+    { bg: 'linear-gradient(90deg, #06b6d4, #6366f1)', text: '#67e8f9' },  // Pod 5: Cyan-Indigo
+    { bg: 'linear-gradient(90deg, #ec4899, #f43f5e)', text: '#f472b6' }   // Pod 6: Pink-Rose
+];
+
+function updateActiveReplicasBadge(count) {
+    const badge = document.getElementById('replica-count-badge');
+    const note = document.getElementById('replica-count-note');
+    if (!badge) return;
+    const effectiveCount = Math.max(count || 0, discoveredReplicas.size, 2);
+    if (effectiveCount > 2) {
+        badge.className = 'badge badge-mini badge-warning';
+        badge.textContent = `${effectiveCount} Replicas (HPA Scaled)`;
+        if (note) note.textContent = '(HPA high-load burst active)';
+    } else {
+        badge.className = 'badge badge-mini text-cyan';
+        badge.textContent = `${effectiveCount} Replicas`;
+        if (note) note.textContent = '(Scales to 6 on CPU burst)';
+    }
+}
 
 function getPodDeploymentHash(name) {
     if (!name) return '';
@@ -168,12 +194,22 @@ async function fetchTelemetry() {
             if (nodeHostElem) nodeHostElem.textContent = data.pod.node;
             const matrixPodElem = document.getElementById('matrix-pod-name');
             if (matrixPodElem) matrixPodElem.textContent = data.pod.name;
+            discoveredReplicas.clear();
+            if (data.pod && data.pod.name) discoveredReplicas.add(data.pod.name);
+            updateActiveReplicasBadge();
             if (previousPodName !== data.pod.name) {
                 appendLog(`New deployment rollout detected: <strong>${data.pod.name}</strong> on node ${data.pod.node}`, 'DEPLOY');
             }
         } else if (previousPodName && previousPodName !== data.pod.name) {
+            if (data.pod && data.pod.name) {
+                discoveredReplicas.add(data.pod.name);
+                updateActiveReplicasBadge();
+            }
             // Live background polling routed to alternate replica (demonstrating multi-pod round-robin)
             appendLog(`Live API check routed to replica: <strong>${data.pod.name}</strong> on node ${data.pod.node}`, 'ROUTER');
+        } else if (data.pod && data.pod.name) {
+            discoveredReplicas.add(data.pod.name);
+            updateActiveReplicasBadge();
         }
         previousPodName = data.pod.name;
 
@@ -239,47 +275,63 @@ async function fetchTelemetry() {
     }
 }
 
-// 1. Dispatch 10 Parallel Requests to demonstrate Load Balancing across pods
+// 1. Dispatch 12 Parallel Requests across cluster to demonstrate Load Balancing across all active pods (2 to 6+ pods)
 elements.btnDispatchTest.addEventListener('click', async () => {
     elements.btnDispatchTest.disabled = true;
     elements.spinnerDispatch.classList.remove('hidden');
     elements.trafficResultsContainer.classList.add('hidden');
-    appendLog('Dispatching 10 parallel asynchronous requests to demonstrate multi-pod load balancing...', 'TRAFFIC');
+    appendLog('Dispatching 12 parallel requests across cluster to test multi-pod load balancing...', 'TRAFFIC');
 
     try {
-        const promises = Array.from({ length: 10 }, (_, i) => 
+        const NUM_REQS = 12;
+        const promises = Array.from({ length: NUM_REQS }, (_, i) => 
             fetch('/api/status?burst=' + i + '_' + Date.now()).then(r => r.json())
         );
 
         const results = await Promise.all(promises);
         const counts = {};
         results.forEach(res => {
-            const pod = res.pod.name;
-            counts[pod] = (counts[pod] || 0) + 1;
+            if (res && res.pod && res.pod.name) {
+                const pod = res.pod.name;
+                counts[pod] = (counts[pod] || 0) + 1;
+                discoveredReplicas.add(pod);
+            }
         });
 
         const pods = Object.keys(counts);
         elements.trafficResultsContainer.classList.remove('hidden');
 
-        if (pods.length >= 2) {
-            const countA = counts[pods[0]];
-            const countB = counts[pods[1]];
-            const pctA = Math.round((countA / 10) * 100);
-            const pctB = Math.round((countB / 10) * 100);
+        if (elements.dispatcherSplitBar && elements.dispatcherLabelsRow) {
+            elements.dispatcherSplitBar.innerHTML = '';
+            elements.dispatcherLabelsRow.innerHTML = '';
 
-            elements.barPodA.style.width = `${pctA}%`;
-            elements.barPodB.style.width = `${pctB}%`;
-            elements.labelPodA.innerHTML = `<strong>${pods[0].split('-').slice(-2).join('-')}</strong>: ${countA} reqs (${pctA}%)`;
-            elements.labelPodB.innerHTML = `<strong>${pods[1].split('-').slice(-2).join('-')}</strong>: ${countB} reqs (${pctB}%)`;
-            appendLog(`Load balancing active: ${pods[0]} handled ${countA} reqs, ${pods[1]} handled ${countB} reqs.`, 'SUCCESS');
-        } else {
-            const singlePod = pods[0] || 'Unknown';
-            elements.barPodA.style.width = '100%';
-            elements.barPodB.style.width = '0%';
-            elements.labelPodA.textContent = `${singlePod}: 10 reqs (100%)`;
-            elements.labelPodB.textContent = '';
-            appendLog(`All requests answered by ${singlePod} (active socket pool).`, 'INFO');
+            pods.forEach((podName, idx) => {
+                const count = counts[podName];
+                const pct = Math.round((count / NUM_REQS) * 100);
+                const palette = POD_PALETTES[idx % POD_PALETTES.length];
+                const shortName = podName.split('-').slice(-2).join('-');
+
+                // Dynamic bar segment
+                const barSegment = document.createElement('div');
+                barSegment.className = 'split-bar-fill';
+                barSegment.style.width = `${pct}%`;
+                barSegment.style.background = palette.bg;
+                barSegment.title = `${podName}: ${count} reqs (${pct}%)`;
+                elements.dispatcherSplitBar.appendChild(barSegment);
+
+                // Dynamic label badge
+                const labelBadge = document.createElement('span');
+                labelBadge.className = 'mono badge-pod-metric';
+                labelBadge.style.color = palette.text;
+                labelBadge.innerHTML = `<strong>${shortName}</strong>: ${count} (${pct}%)`;
+                elements.dispatcherLabelsRow.appendChild(labelBadge);
+            });
         }
+
+        updateActiveReplicasBadge(pods.length);
+
+        const summary = pods.map(p => `${p.split('-').slice(-1)[0]} (${counts[p]} reqs)`).join(', ');
+        appendLog(`Traffic distributed across ${pods.length} active pods: ${summary}`, 'SUCCESS');
     } catch (e) {
         appendLog(`Traffic dispatch error: ${e.message}`, 'ERROR');
     } finally {

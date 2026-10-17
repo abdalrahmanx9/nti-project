@@ -132,6 +132,10 @@
                             <span class="data-key">Cross-Zone Routing</span>
                             <span class="data-val"><span class="badge badge-success">Active &middot; Multi-AZ</span></span>
                         </li>
+                        <li>
+                            <span class="data-key">Active Replicas</span>
+                            <span class="data-val mono" id="k8s-replica-count"><span class="badge badge-mini text-cyan" id="replica-count-badge">2 Replicas</span> <span class="text-muted" id="replica-count-note" style="font-size: 11px;">(Scales to 6 on CPU burst)</span></span>
+                        </li>
                     </ul>
 
                     <div class="traffic-dispatcher-box">
@@ -139,18 +143,12 @@
                             <span class="traffic-title">Cross-Pod Dispatcher</span>
                             <button id="btn-dispatch-test" class="btn btn-sm btn-primary">
                                 <span class="btn-spinner hidden" id="spinner-dispatch"></span>
-                                Dispatch 10 Requests
+                                Dispatch 12 Requests
                             </button>
                         </div>
                         <div id="traffic-results-container" class="traffic-results hidden">
-                            <div class="split-bar-container">
-                                <div class="split-bar-fill bar-pod-a" id="bar-pod-a" style="width: 50%;"></div>
-                                <div class="split-bar-fill bar-pod-b" id="bar-pod-b" style="width: 50%;"></div>
-                            </div>
-                            <div class="split-labels-row">
-                                <span class="label-pod-a mono" id="label-pod-a">Pod A: 5 (50%)</span>
-                                <span class="label-pod-b mono" id="label-pod-b">Pod B: 5 (50%)</span>
-                            </div>
+                            <div class="split-bar-container" id="dispatcher-split-bar"></div>
+                            <div class="split-labels-row" id="dispatcher-labels-row"></div>
                         </div>
                     </div>
                 </div>
@@ -538,9 +536,9 @@
                                                 </div>
                                                 <div class="pod-details-grid mono">
                                                     <div>Namespace: <span>default</span></div>
-                                                    <div>Type: <span>Deployment (2 Replicas)</span></div>
+                                                    <div>Type: <span>Deployment (2-6 Replicas via HPA)</span></div>
                                                     <div>Target Port: <span>8000</span></div>
-                                                    <div>HPA Threshold: <span>80% CPU</span></div>
+                                                    <div>Autoscale: <span>HPA active (Min: 2, Max: 6 pods @ 75% CPU)</span></div>
                                                 </div>
                                                 <div class="pod-features">
                                                     <span class="feature-pill">Zone Redundancy</span>
