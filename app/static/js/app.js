@@ -112,8 +112,8 @@ function drawTelemetryChart() {
         ctx.fill();
     }
 
-    drawSeries('mem', '#8b5cf6', 'rgba(139, 92, 246, 0.12)');
-    drawSeries('cpu', '#06b6d4', 'rgba(6, 182, 212, 0.18)');
+    drawSeries('mem', '#9a7bde', 'rgba(154, 123, 222, 0.12)');
+    drawSeries('cpu', '#4d80e4', 'rgba(77, 128, 228, 0.18)');
 }
 
 // Render audit records in the database table
