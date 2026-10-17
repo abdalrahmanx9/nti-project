@@ -5,7 +5,7 @@ replicaCount: 2
 
 image:
   repository: 270485099284.dkr.ecr.us-east-1.amazonaws.com/nti-devops-app
-  pullPolicy: IfNotPresent
+  pullPolicy: Always
   tag: "latest"
 
 imagePullSecrets: []
