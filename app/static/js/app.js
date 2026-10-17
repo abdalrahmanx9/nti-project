@@ -44,7 +44,16 @@ const elements = {
     topologyModal: document.getElementById('topology-modal'),
 };
 
-let previousPodName = null;
+// ponytail: initialize from server-rendered DOM so we know the session pod immediately
+const sessionServingPod = elements.podDisplay ? elements.podDisplay.textContent.trim() : null;
+let previousPodName = sessionServingPod;
+
+function getPodDeploymentHash(name) {
+    if (!name) return '';
+    const parts = name.split('-');
+    return parts.length >= 3 ? parts[parts.length - 2] : name;
+}
+
 const historyPoints = [];
 const MAX_HISTORY = 20;
 
@@ -120,7 +129,7 @@ function drawTelemetryChart() {
 
 // Render audit records in the database table
 function renderAuditTable(records) {
-    if (!records || records.length === 0) return;
+    if (!elements.dbAuditTbody || !records || records.length === 0) return;
     elements.dbAuditTbody.innerHTML = records.map(r => `
         <tr>
             <td class="mono font-bold text-cyan">#${r.id}</td>
@@ -138,25 +147,39 @@ async function fetchTelemetry() {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json();
 
-        // Check if traffic routed to a new pod
-        if (previousPodName && previousPodName !== data.pod.name) {
-            elements.podDisplay.classList.add('flash-change');
-            appendLog(`Traffic routed to different pod: <strong>${data.pod.name}</strong> on node ${data.pod.node}`, 'ROUTER');
-            setTimeout(() => elements.podDisplay.classList.remove('flash-change'), 2000);
+        // Update live round-robin routing target badge
+        const liveTargetBadge = document.getElementById('live-target-badge');
+        if (liveTargetBadge && data.pod && data.pod.name) {
+            const shortId = data.pod.name.split('-').slice(-1)[0] || data.pod.name;
+            liveTargetBadge.textContent = shortId;
+        }
+
+        // Check if traffic routed to a new pod during background polling
+        const currentHash = getPodDeploymentHash(data.pod ? data.pod.name : '');
+        const sessionHash = getPodDeploymentHash(sessionServingPod);
+
+        // Only swap the session serving pod if an actual new deployment rollout occurred
+        if (sessionHash && currentHash && currentHash !== sessionHash) {
+            elements.podDisplay.textContent = data.pod.name;
+            elements.k8sPodName.textContent = data.pod.name;
+            elements.nodeDisplay.textContent = data.pod.node;
+            elements.k8sPodIp.textContent = data.pod.ip;
+            const nodeHostElem = document.getElementById('k8s-node-host');
+            if (nodeHostElem) nodeHostElem.textContent = data.pod.node;
+            const matrixPodElem = document.getElementById('matrix-pod-name');
+            if (matrixPodElem) matrixPodElem.textContent = data.pod.name;
+            if (previousPodName !== data.pod.name) {
+                appendLog(`New deployment rollout detected: <strong>${data.pod.name}</strong> on node ${data.pod.node}`, 'DEPLOY');
+            }
+        } else if (previousPodName && previousPodName !== data.pod.name) {
+            // Live background polling routed to alternate replica (demonstrating multi-pod round-robin)
+            appendLog(`Live API check routed to replica: <strong>${data.pod.name}</strong> on node ${data.pod.node}`, 'ROUTER');
         }
         previousPodName = data.pod.name;
 
-        // Uptime & Pod Metadata
+        // Uptime & Host Metadata
         elements.uptimeDisplay.textContent = data.uptime_formatted;
-        elements.nodeDisplay.textContent = data.pod.node;
-        elements.podDisplay.textContent = data.pod.name;
-        elements.k8sPodName.textContent = data.pod.name;
-        elements.k8sPodIp.textContent = data.pod.ip;
         elements.k8sNamespace.textContent = data.pod.namespace;
-        const nodeHostElem = document.getElementById('k8s-node-host');
-        if (nodeHostElem) nodeHostElem.textContent = data.pod.node;
-        const matrixPodElem = document.getElementById('matrix-pod-name');
-        if (matrixPodElem) matrixPodElem.textContent = data.pod.name;
         const matrixDbElem = document.getElementById('matrix-db-host');
         if (matrixDbElem) matrixDbElem.textContent = data.database.host;
 
@@ -454,6 +477,5 @@ if (specSearch) {
     });
 }
 
-// Start periodic polling every 2.5 seconds
+// Start periodic background telemetry polling (initial HTML already contains server-rendered metrics)
 setInterval(fetchTelemetry, 2500);
-fetchTelemetry();

@@ -91,7 +91,12 @@ async def prometheus_metrics_middleware(request: Request, call_next):
             endpoint=endpoint_label
         ).observe(duration)
 
-    if endpoint_label == "/static/*":
+    if endpoint == "/" or endpoint.startswith("/api/"):
+        # ponytail: prevent browser heuristic caching and bfcache from painting stale pod telemetry on refresh
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    elif endpoint_label == "/static/*":
         response.headers["Cache-Control"] = "no-cache, must-revalidate"
 
     return response

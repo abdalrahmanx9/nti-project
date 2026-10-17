@@ -107,10 +107,14 @@
                     <ul class="data-list">
                         <li class="data-row-stacked">
                             <div class="stacked-header">
-                                <span class="data-key">Serving Pod (Active Replica)</span>
+                                <span class="data-key">Serving Pod (Page Session)</span>
                                 <button type="button" class="btn-copy-mini" id="btn-copy-pod-name" title="Copy Pod Name">Copy</button>
                             </div>
                             <span class="data-val mono highlight-blue word-break" id="k8s-pod-name">{{ data.pod.name }}</span>
+                        </li>
+                        <li>
+                            <span class="data-key">Live Routing Target</span>
+                            <span class="data-val mono" id="k8s-live-target"><span class="badge badge-mini text-cyan" id="live-target-badge">{{ data.pod.name.split('-')[-1] }}</span> <span class="text-muted" style="font-size: 11px;">(Active Round-Robin)</span></span>
                         </li>
                         <li>
                             <span class="data-key">Pod IP</span>

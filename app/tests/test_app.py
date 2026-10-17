@@ -26,6 +26,7 @@ def test_api_status_endpoint():
     """Verify live telemetry API returns pod metadata and system statistics"""
     response = client.get("/api/status")
     assert response.status_code == 200
+    assert "no-store" in response.headers.get("cache-control", "")
     data = response.json()
     assert "app_name" in data
     assert "pod" in data
@@ -38,6 +39,7 @@ def test_dashboard_ui_renders():
     """Verify HTML UI renders and contains NTI platform branding"""
     response = client.get("/")
     assert response.status_code == 200
+    assert "no-store" in response.headers.get("cache-control", "")
     assert "text/html" in response.headers.get("content-type", "")
     assert "NTI DevOps Final Project" in response.text
 
