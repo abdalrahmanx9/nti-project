@@ -150,6 +150,11 @@ pipeline {
         failure {
             echo '=== Pipeline Execution Failed! Dispatching HTML Alert Email ==='
             sh '''
+                if [ -f /etc/environment ]; then
+                    set -a
+                    . /etc/environment
+                    set +a
+                fi
                 python3 scripts/send_failure_email.py || true
             '''
         }
