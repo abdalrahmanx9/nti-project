@@ -70,15 +70,15 @@ pipeline {
             steps {
                 dir('terraform') {
                     echo '=== Generating Terraform Execution Plan ==='
-                    sh '''
-                        if [ "${params.TERRAFORM_ACTION}" = "destroy" ]; then
-                            echo "Generating DESTROY plan..."
-                            terraform plan -destroy -out=tfplan
-                        else
-                            echo "Generating Standard APPLY plan..."
-                            terraform plan -out=tfplan
-                        fi
-                    '''
+                    script {
+                        if (params.TERRAFORM_ACTION == 'destroy') {
+                            echo 'Generating DESTROY plan...'
+                            sh 'terraform plan -destroy -out=tfplan'
+                        } else {
+                            echo 'Generating Standard APPLY plan...'
+                            sh 'terraform plan -out=tfplan'
+                        }
+                    }
                 }
             }
         }
