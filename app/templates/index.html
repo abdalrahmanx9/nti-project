@@ -6,40 +6,40 @@
     <title>NTI DevOps Platform | Cloud-Native Dashboard</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
-    <div class="background-mesh"></div>
+    <div class="page-glow"></div>
 
     <div class="layout-container">
         <!-- Top Navigation Bar -->
         <header class="top-nav">
             <div class="nav-brand">
                 <div class="brand-logo">
-                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
                         <polyline points="2 17 12 22 22 17"></polyline>
                         <polyline points="2 12 12 17 22 12"></polyline>
                     </svg>
                 </div>
                 <div>
-                    <h1 class="brand-title">NTI DevOps Final Project</h1>
-                    <p class="brand-subtitle">Cloud-Native Microservice & Infrastructure Platform</p>
+                    <h1 class="brand-title">NTI DevOps Platform</h1>
+                    <p class="brand-subtitle">Kubernetes &middot; RDS &middot; Prometheus &middot; EKS</p>
                 </div>
             </div>
 
             <div class="nav-badges">
-                <button id="btn-open-topology" class="btn btn-sm btn-outline-cyan">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <button id="btn-open-topology" class="btn btn-sm btn-outline">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
                         <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
                         <line x1="6" y1="6" x2="6.01" y2="6"></line>
                         <line x1="6" y1="18" x2="6.01" y2="18"></line>
                     </svg>
-                    Architecture Topology
+                    Topology
                 </button>
-                <a href="/docs" target="_blank" class="btn btn-sm btn-ghost mono">Swagger API</a>
+                <a href="/docs" target="_blank" class="btn btn-sm btn-outline mono">/docs</a>
                 <span class="badge badge-env" id="env-badge">{{ data.environment | upper }}</span>
                 <span class="badge badge-version">v{{ data.version }}</span>
                 <div class="live-pill">
@@ -49,342 +49,344 @@
             </div>
         </header>
 
-        <!-- Main Dashboard Content -->
-        <main class="dashboard-main">
-            <!-- Hero Status Ribbon -->
-            <section class="status-ribbon">
-                <div class="ribbon-card">
-                    <span class="ribbon-label">Application Health</span>
-                    <div class="ribbon-value" id="overall-status">
-                        {% if data.database.healthy %}
-                            <span class="status-indicator status-ok"></span> Optimal
-                        {% else %}
-                            <span class="status-indicator status-warn"></span> Degraded
-                        {% endif %}
+        <!-- Big Stat Tiles -->
+        <section class="stat-tiles">
+            <div class="tile tile-health">
+                <span class="tile-label">System Health</span>
+                <div class="tile-value" id="overall-status">
+                    {% if data.database.healthy %}
+                        <span class="status-indicator status-ok"></span> Optimal
+                    {% else %}
+                        <span class="status-indicator status-warn"></span> Degraded
+                    {% endif %}
+                </div>
+                <span class="tile-sub">cluster &amp; database</span>
+            </div>
+
+            <div class="tile tile-uptime">
+                <span class="tile-label">Uptime</span>
+                <div class="tile-value mono" id="uptime-display">{{ data.uptime_formatted }}</div>
+                <span class="tile-sub">application process</span>
+            </div>
+
+            <div class="tile tile-cpu">
+                <span class="tile-label">CPU</span>
+                <div class="tile-value mono" id="cpu-hero">{{ data.system.cpu_percent }}%</div>
+                <span class="tile-sub">container utilization</span>
+            </div>
+
+            <div class="tile tile-ram">
+                <span class="tile-label">Memory</span>
+                <div class="tile-value mono" id="ram-hero">{{ data.system.memory_percent }}%</div>
+                <span class="tile-sub mono" id="mem-sub">{{ data.system.memory_used_mb }} / {{ data.system.memory_total_mb }} MB</span>
+            </div>
+
+            <div class="tile tile-pod">
+                <span class="tile-label">Serving Pod</span>
+                <div class="tile-value mono tile-pod-name" id="pod-display" title="{{ data.pod.name }}">{{ data.pod.name }}</div>
+                <span class="tile-sub mono" id="node-display">{{ data.pod.node }}</span>
+            </div>
+        </section>
+
+        <!-- Cards Grid -->
+        <div class="grid-cards">
+            <!-- Card 1: Kubernetes & Traffic Routing -->
+            <div class="card accent-blue">
+                <div class="card-header">
+                    <div class="card-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="12" y1="2" x2="12" y2="22"></line>
+                            <path d="m4.93 4.93 14.14 14.14"></path>
+                            <path d="m19.07 4.93-14.14 14.14"></path>
+                        </svg>
                     </div>
+                    <h3>Multi-Pod Routing &amp; Load Balancer</h3>
                 </div>
+                <div class="card-body">
+                    <ul class="data-list">
+                        <li>
+                            <span class="data-key">Serving Pod</span>
+                            <span class="data-val mono highlight-blue" id="k8s-pod-name">{{ data.pod.name }}</span>
+                        </li>
+                        <li>
+                            <span class="data-key">Pod IP</span>
+                            <span class="data-val mono" id="k8s-pod-ip">{{ data.pod.ip }}</span>
+                        </li>
+                        <li>
+                            <span class="data-key">Namespace</span>
+                            <span class="data-val mono" id="k8s-namespace">{{ data.pod.namespace }}</span>
+                        </li>
+                        <li>
+                            <span class="data-key">Cross-Zone Routing</span>
+                            <span class="data-val"><span class="badge badge-success">Active &middot; Multi-AZ</span></span>
+                        </li>
+                    </ul>
 
-                <div class="ribbon-card">
-                    <span class="ribbon-label">Uptime</span>
-                    <div class="ribbon-value mono" id="uptime-display">{{ data.uptime_formatted }}</div>
-                </div>
-
-                <div class="ribbon-card">
-                    <span class="ribbon-label">K8s Node Host</span>
-                    <div class="ribbon-value mono" id="node-display">{{ data.pod.node }}</div>
-                </div>
-
-                <div class="ribbon-card highlight-card">
-                    <span class="ribbon-label">Active Pod Origin</span>
-                    <div class="ribbon-value mono" id="pod-display" title="{{ data.pod.name }}">{{ data.pod.name }}</div>
-                </div>
-            </section>
-
-            <!-- 4 Core Pillars Grid -->
-            <div class="grid-cards">
-                <!-- Card 1: Kubernetes & Traffic Routing Visualizer -->
-                <div class="card glass-card">
-                    <div class="card-header">
-                        <div class="card-icon icon-k8s">
-                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <circle cx="12" cy="12" r="10"></circle>
-                                <line x1="12" y1="2" x2="12" y2="22"></line>
-                                <path d="m4.93 4.93 14.14 14.14"></path>
-                                <path d="m19.07 4.93-14.14 14.14"></path>
-                            </svg>
-                        </div>
-                        <h3>Multi-Pod Routing & Load Balancer</h3>
-                    </div>
-                    <div class="card-body">
-                        <ul class="data-list">
-                            <li>
-                                <span class="data-key">Serving Pod Name</span>
-                                <span class="data-val mono highlight-val" id="k8s-pod-name">{{ data.pod.name }}</span>
-                            </li>
-                            <li>
-                                <span class="data-key">Internal VPC Pod IP</span>
-                                <span class="data-val mono" id="k8s-pod-ip">{{ data.pod.ip }}</span>
-                            </li>
-                            <li>
-                                <span class="data-key">Kubernetes Namespace</span>
-                                <span class="data-val mono" id="k8s-namespace">{{ data.pod.namespace }}</span>
-                            </li>
-                            <li>
-                                <span class="data-key">ELB Cross-Zone Routing</span>
-                                <span class="badge badge-success">ACTIVE (Multi-AZ)</span>
-                            </li>
-                        </ul>
-
-                        <!-- Interactive Traffic Dispatcher Widget -->
-                        <div class="traffic-dispatcher-box">
-                            <div class="traffic-header">
-                                <span class="traffic-title">Live Cross-Pod Dispatcher</span>
-                                <button id="btn-dispatch-test" class="btn btn-sm btn-primary">
-                                    <span class="btn-spinner hidden" id="spinner-dispatch"></span>
-                                    Dispatch 10 Parallel Requests
-                                </button>
-                            </div>
-                            <div id="traffic-results-container" class="traffic-results hidden">
-                                <div class="split-bar-container">
-                                    <div class="split-bar-fill bar-pod-a" id="bar-pod-a" style="width: 50%;"></div>
-                                    <div class="split-bar-fill bar-pod-b" id="bar-pod-b" style="width: 50%;"></div>
-                                </div>
-                                <div class="split-labels-row" id="traffic-labels-row">
-                                    <span class="label-pod-a" id="label-pod-a">Pod A: 5 (50%)</span>
-                                    <span class="label-pod-b" id="label-pod-b">Pod B: 5 (50%)</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Card 2: AWS RDS / PostgreSQL & Live Guestbook -->
-                <div class="card glass-card">
-                    <div class="card-header">
-                        <div class="card-icon icon-db">
-                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
-                                <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
-                                <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
-                            </svg>
-                        </div>
-                        <h3>PostgreSQL / AWS RDS Persistence</h3>
-                    </div>
-                    <div class="card-body">
-                        <ul class="data-list">
-                            <li>
-                                <span class="data-key">Connection State</span>
-                                <span class="data-val" id="db-state-badge">
-                                    {% if data.database.healthy %}
-                                        <span class="badge badge-success">CONNECTED</span>
-                                    {% else %}
-                                        <span class="badge badge-warning">OFFLINE</span>
-                                    {% endif %}
-                                </span>
-                            </li>
-                            <li>
-                                <span class="data-key">Query Latency</span>
-                                <span class="data-val mono" id="db-latency">{{ data.database.latency_ms }} ms</span>
-                            </li>
-                            <li>
-                                <span class="data-key">RDS Database Host</span>
-                                <span class="data-val mono host-pill" id="db-host" title="{{ data.database.host }}">{{ data.database.host }}</span>
-                            </li>
-                            <li>
-                                <span class="data-key">Target Database</span>
-                                <span class="data-val mono" id="db-name">{{ data.database.name }}</span>
-                            </li>
-                        </ul>
-
-                        <div class="card-action row-action">
-                            <button id="btn-test-db" class="btn btn-secondary">
-                                <span class="btn-spinner hidden" id="spinner-db"></span>
-                                Write Audit Record to PostgreSQL
+                    <div class="traffic-dispatcher-box">
+                        <div class="traffic-header">
+                            <span class="traffic-title">Cross-Pod Dispatcher</span>
+                            <button id="btn-dispatch-test" class="btn btn-sm btn-primary">
+                                <span class="btn-spinner hidden" id="spinner-dispatch"></span>
+                                Dispatch 10 Requests
                             </button>
-                            <span class="badge badge-indigo" id="db-total-count">RDS Synced</span>
                         </div>
-                        <div id="db-feedback" class="feedback-msg hidden"></div>
-
-                        <!-- Live Recent Records Table -->
-                        <div class="audit-table-wrapper">
-                            <span class="audit-table-title">Recent Transactions Recorded in RDS:</span>
-                            <table class="audit-table" id="db-audit-table">
-                                <thead>
-                                    <tr>
-                                        <th>#ID</th>
-                                        <th>Time</th>
-                                        <th>Origin Pod</th>
-                                        <th>Client IP</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="db-audit-tbody">
-                                    {% if data.database.recent_visits %}
-                                        {% for row in data.database.recent_visits %}
-                                            <tr>
-                                                <td class="mono">#{{ row.id }}</td>
-                                                <td class="mono">{{ row.timestamp }}</td>
-                                                <td class="mono"><span class="badge-mini">{{ row.pod_name }}</span></td>
-                                                <td class="mono">{{ row.client_ip }}</td>
-                                            </tr>
-                                        {% endfor %}
-                                    {% else %}
-                                        <tr>
-                                            <td colspan="4" class="text-muted text-center">Click "Write Audit Record" to insert live data</td>
-                                        </tr>
-                                    {% endif %}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Card 3: Real-Time Resource Telemetry & Chart -->
-                <div class="card glass-card">
-                    <div class="card-header">
-                        <div class="card-icon icon-gauge">
-                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M12 2v4"></path>
-                                <path d="m4.93 4.93 2.83 2.83"></path>
-                                <path d="M2 12h4"></path>
-                                <path d="m4.93 19.07 2.83-2.83"></path>
-                                <path d="M12 22v-4"></path>
-                                <path d="m19.07 19.07-2.83-2.83"></path>
-                                <path d="M22 12h-4"></path>
-                                <path d="m19.07 4.93-2.83 2.83"></path>
-                            </svg>
-                        </div>
-                        <h3>Resource Telemetry & Real-Time Sparkline</h3>
-                    </div>
-                    <div class="card-body">
-                        <!-- CPU Usage Bar -->
-                        <div class="metric-block">
-                            <div class="metric-label-row">
-                                <span>Container CPU Utilization</span>
-                                <span class="mono" id="cpu-text">{{ data.system.cpu_percent }}%</span>
+                        <div id="traffic-results-container" class="traffic-results hidden">
+                            <div class="split-bar-container">
+                                <div class="split-bar-fill bar-pod-a" id="bar-pod-a" style="width: 50%;"></div>
+                                <div class="split-bar-fill bar-pod-b" id="bar-pod-b" style="width: 50%;"></div>
                             </div>
-                            <div class="progress-bar-bg">
-                                <div class="progress-bar-fill" id="cpu-fill" style="width: {{ data.system.cpu_percent }}%;"></div>
-                                <div class="threshold-line" title="80% Prometheus Alarm Threshold" style="left: 80%;"></div>
+                            <div class="split-labels-row">
+                                <span class="label-pod-a mono" id="label-pod-a">Pod A: 5 (50%)</span>
+                                <span class="label-pod-b mono" id="label-pod-b">Pod B: 5 (50%)</span>
                             </div>
                         </div>
-
-                        <!-- Memory Usage Bar -->
-                        <div class="metric-block">
-                            <div class="metric-label-row">
-                                <span>Memory (RAM) Footprint</span>
-                                <span class="mono" id="mem-text">{{ data.system.memory_percent }}%</span>
-                            </div>
-                            <div class="progress-bar-bg">
-                                <div class="progress-bar-fill" id="mem-fill" style="width: {{ data.system.memory_percent }}%;"></div>
-                                <div class="threshold-line" title="80% Prometheus Alarm Threshold" style="left: 80%;"></div>
-                            </div>
-                            <div class="metric-sub mono" id="mem-sub">
-                                {{ data.system.memory_used_mb }} MB / {{ data.system.memory_total_mb }} MB
-                            </div>
-                        </div>
-
-                        <!-- Live Real-Time Canvas Line Chart -->
-                        <div class="chart-container-box">
-                            <div class="chart-header-row">
-                                <span class="chart-title">Live 30s Utilization Timeline:</span>
-                                <span class="chart-legend"><span class="dot-cpu"></span> CPU &nbsp; <span class="dot-mem"></span> RAM</span>
-                            </div>
-                            <canvas id="telemetry-chart" width="460" height="90"></canvas>
-                        </div>
-
-                        <div class="alarm-badge-row">
-                            <span class="threshold-pill">Alarm Threshold: <strong>80%</strong></span>
-                            <span id="alarm-status-pill" class="pill-ok">Normal (Below 80%)</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Card 4: Observability & Interactive Load Generator -->
-                <div class="card glass-card">
-                    <div class="card-header">
-                        <div class="card-icon icon-prom">
-                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M18 20V10"></path>
-                                <path d="M12 20V4"></path>
-                                <path d="M6 20v-6"></path>
-                            </svg>
-                        </div>
-                        <h3>Prometheus Scrapes & HPA Load Generator</h3>
-                    </div>
-                    <div class="card-body">
-                        <p class="card-desc">
-                            Scraped automatically via <code>ServiceMonitor</code>. Trigger stress bursts to force container CPU above 80% to demonstrate Horizontal Pod Autoscaler (HPA) and Alertmanager notifications.
-                        </p>
-                        
-                        <div class="metric-link-box">
-                            <span>Prometheus Metrics Export:</span>
-                            <a href="/metrics" target="_blank" class="btn btn-sm btn-ghost mono">View /metrics &rarr;</a>
-                        </div>
-
-                        <div class="stress-control-panel">
-                            <span class="control-label">Select Load Test Profile:</span>
-                            <div class="stress-btn-group">
-                                <button id="btn-stress-15" class="btn btn-outline-amber">15s Quick Burst</button>
-                                <button id="btn-stress-45" class="btn btn-warning">45s Alarm Test (&gt;80%)</button>
-                                <button id="btn-stress-stop" class="btn btn-outline-rose hidden">Stop Stress</button>
-                            </div>
-                        </div>
-                        <div id="stress-feedback" class="feedback-msg hidden"></div>
                     </div>
                 </div>
             </div>
 
-            <!-- Activity & Architecture Summary Section -->
-            <section class="card glass-card live-log-card">
+            <!-- Card 2: PostgreSQL / RDS -->
+            <div class="card accent-green">
                 <div class="card-header">
-                    <div class="card-icon icon-terminal">
-                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="4 17 10 11 4 5"></polyline>
-                            <line x1="12" y1="19" x2="20" y2="19"></line>
+                    <div class="card-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+                            <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
+                            <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
                         </svg>
                     </div>
-                    <h3>Live Platform Event Stream</h3>
-                    <button id="btn-clear-logs" class="btn-text">Clear</button>
+                    <h3>PostgreSQL &middot; AWS RDS</h3>
                 </div>
-                <div class="terminal-body" id="event-log-container">
-                    <div class="log-line"><span class="log-ts">[INIT]</span> Platform telemetry initialized. Cross-Zone Load Balancing active.</div>
-                </div>
-            </section>
-        </main>
+                <div class="card-body">
+                    <ul class="data-list">
+                        <li>
+                            <span class="data-key">Connection</span>
+                            <span class="data-val" id="db-state-badge">
+                                {% if data.database.healthy %}
+                                    <span class="badge badge-success">Connected</span>
+                                {% else %}
+                                    <span class="badge badge-warning">Offline</span>
+                                {% endif %}
+                            </span>
+                        </li>
+                        <li>
+                            <span class="data-key">Query Latency</span>
+                            <span class="data-val mono"><span id="db-latency">{{ data.database.latency_ms }}</span> ms</span>
+                        </li>
+                        <li>
+                            <span class="data-key">RDS Host</span>
+                            <span class="data-val mono host-pill" id="db-host" title="{{ data.database.host }}">{{ data.database.host }}</span>
+                        </li>
+                        <li>
+                            <span class="data-key">Database</span>
+                            <span class="data-val mono" id="db-name">{{ data.database.name }}</span>
+                        </li>
+                    </ul>
 
-        <!-- Infrastructure Architecture Topology Modal -->
-        <div id="topology-modal" class="modal-backdrop hidden">
-            <div class="modal-card">
-                <div class="modal-header">
-                    <h3>Enterprise Cloud-Native Architecture Topology</h3>
-                    <button id="btn-close-topology" class="btn-close">&times;</button>
+                    <div class="card-action row-action">
+                        <button id="btn-test-db" class="btn btn-green">
+                            <span class="btn-spinner hidden" id="spinner-db"></span>
+                            Write Audit Record
+                        </button>
+                        <span class="badge badge-green" id="db-total-count">RDS Synced</span>
+                    </div>
+                    <div id="db-feedback" class="feedback-msg hidden"></div>
+
+                    <div class="audit-table-wrapper">
+                        <span class="audit-table-title">Recent Transactions in RDS</span>
+                        <table class="audit-table" id="db-audit-table">
+                            <thead>
+                                <tr>
+                                    <th>#ID</th>
+                                    <th>Time</th>
+                                    <th>Origin Pod</th>
+                                    <th>Client IP</th>
+                                </tr>
+                            </thead>
+                            <tbody id="db-audit-tbody">
+                                {% if data.database.recent_visits %}
+                                    {% for row in data.database.recent_visits %}
+                                        <tr>
+                                            <td class="mono">#{{ row.id }}</td>
+                                            <td class="mono">{{ row.timestamp }}</td>
+                                            <td class="mono"><span class="badge-mini">{{ row.pod_name }}</span></td>
+                                            <td class="mono">{{ row.client_ip }}</td>
+                                        </tr>
+                                    {% endfor %}
+                                {% else %}
+                                    <tr>
+                                        <td colspan="4" class="text-muted text-center">Click "Write Audit Record" to insert live data</td>
+                                    </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
-                <div class="modal-body">
-                    <div class="topology-diagram">
-                        <div class="top-node">
-                            <span class="node-badge node-client">Public Internet Client</span>
-                            <div class="conn-arrow">&darr;</div>
-                        </div>
-                        <div class="top-node">
-                            <span class="node-badge node-cf">Cloudflare DNS & Edge Proxy</span>
-                            <div class="conn-arrow">&darr;</div>
-                        </div>
-                        <div class="top-node">
-                            <span class="node-badge node-elb">AWS Elastic Load Balancer (Cross-Zone Enabled)</span>
-                            <div class="conn-arrow">&darr;</div>
-                        </div>
-                        <div class="top-cluster-row">
-                            <div class="sub-cluster">
-                                <strong>AWS EKS: Worker Node A</strong>
-                                <span class="mono">us-east-1a (10.0.33.204)</span>
-                                <div class="pod-pill">Pod: nti-app-...-cs4xz</div>
+            </div>
+
+            <!-- Card 3: Telemetry with Gauge Rings -->
+            <div class="card accent-violet">
+                <div class="card-header">
+                    <div class="card-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 2v4"></path>
+                            <path d="m4.93 4.93 2.83 2.83"></path>
+                            <path d="M2 12h4"></path>
+                            <path d="m4.93 19.07 2.83-2.83"></path>
+                            <path d="M12 22v-4"></path>
+                            <path d="m19.07 19.07-2.83-2.83"></path>
+                            <path d="M22 12h-4"></path>
+                            <path d="m19.07 4.93-2.83 2.83"></path>
+                        </svg>
+                    </div>
+                    <h3>Resource Telemetry</h3>
+                </div>
+                <div class="card-body">
+                    <div class="gauges-row">
+                        <div class="gauge-block">
+                            <div class="gauge-wrap">
+                                <svg class="gauge" viewBox="0 0 80 80">
+                                    <circle class="gauge-track" cx="40" cy="40" r="34"></circle>
+                                    <circle class="gauge-fill gauge-cpu" id="cpu-fill" cx="40" cy="40" r="34"
+                                            stroke-dasharray="213.63" stroke-dashoffset="{{ (213.63 * (1 - (data.system.cpu_percent / 100))) | round(1) }}"></circle>
+                                </svg>
+                                <div class="gauge-center mono" id="cpu-text">{{ data.system.cpu_percent }}%</div>
                             </div>
-                            <div class="sub-cluster">
-                                <strong>AWS EKS: Worker Node B</strong>
-                                <span class="mono">us-east-1b (10.0.62.127)</span>
-                                <div class="pod-pill">Pod: nti-app-...-x4tph</div>
-                            </div>
+                            <span class="gauge-name">CPU</span>
                         </div>
-                        <div class="conn-arrow-dual">&darr; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &darr;</div>
-                        <div class="bottom-tier-row">
-                            <div class="tier-box">
-                                <strong>AWS RDS Multi-AZ PostgreSQL</strong>
-                                <span class="mono">ntiapp (Port 5432, Private Subnets)</span>
+                        <div class="gauge-block">
+                            <div class="gauge-wrap">
+                                <svg class="gauge" viewBox="0 0 80 80">
+                                    <circle class="gauge-track" cx="40" cy="40" r="34"></circle>
+                                    <circle class="gauge-fill gauge-mem" id="mem-fill" cx="40" cy="40" r="34"
+                                            stroke-dasharray="213.63" stroke-dashoffset="{{ (213.63 * (1 - (data.system.memory_percent / 100))) | round(1) }}"></circle>
+                                </svg>
+                                <div class="gauge-center mono" id="mem-text">{{ data.system.memory_percent }}%</div>
                             </div>
-                            <div class="tier-box">
-                                <strong>Observability Stack</strong>
-                                <span class="mono">Prometheus + Alertmanager + Grafana</span>
-                            </div>
+                            <span class="gauge-name">Memory</span>
                         </div>
                     </div>
+
+                    <div class="chart-container-box">
+                        <div class="chart-header-row">
+                            <span class="chart-title">Live 30s Timeline</span>
+                            <span class="chart-legend"><span class="dot-cpu"></span> CPU &nbsp; <span class="dot-mem"></span> RAM</span>
+                        </div>
+                        <canvas id="telemetry-chart" width="460" height="90"></canvas>
+                    </div>
+
+                    <div class="alarm-badge-row">
+                        <span class="threshold-pill mono">Alarm threshold <strong>80%</strong></span>
+                        <span id="alarm-status-pill" class="pill-ok">Normal (Below 80%)</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card 4: Prometheus & HPA Load Generator -->
+            <div class="card accent-orange">
+                <div class="card-header">
+                    <div class="card-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M18 20V10"></path>
+                            <path d="M12 20V4"></path>
+                            <path d="M6 20v-6"></path>
+                        </svg>
+                    </div>
+                    <h3>Prometheus &amp; HPA Load Generator</h3>
+                </div>
+                <div class="card-body">
+                    <p class="card-desc">
+                        Scraped automatically via <code>ServiceMonitor</code>. Trigger stress bursts to push container CPU above 80% and demonstrate Horizontal Pod Autoscaler (HPA) scaling plus Alertmanager notifications.
+                    </p>
+
+                    <div class="metric-link-box">
+                        <span>Prometheus Metrics Export</span>
+                        <a href="/metrics" target="_blank" class="btn btn-sm btn-outline mono">/metrics &rarr;</a>
+                    </div>
+
+                    <div class="stress-control-panel">
+                        <span class="control-label">Load Test Profile</span>
+                        <div class="stress-btn-group">
+                            <button id="btn-stress-15" class="btn btn-outline-amber">15s Quick Burst</button>
+                            <button id="btn-stress-45" class="btn btn-amber">45s Alarm Test (&gt;80%)</button>
+                            <button id="btn-stress-stop" class="btn btn-outline-rose hidden">Stop Stress</button>
+                        </div>
+                    </div>
+                    <div id="stress-feedback" class="feedback-msg hidden"></div>
                 </div>
             </div>
         </div>
+
+        <!-- Event Stream -->
+        <section class="card accent-slate live-log-card">
+            <div class="card-header">
+                <div class="card-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="4 17 10 11 4 5"></polyline>
+                        <line x1="12" y1="19" x2="20" y2="19"></line>
+                    </svg>
+                </div>
+                <h3>Live Platform Event Stream</h3>
+                <button id="btn-clear-logs" class="btn-text">Clear</button>
+            </div>
+            <div class="terminal-body" id="event-log-container">
+                <div class="log-line"><span class="log-ts">[INIT]</span> Platform telemetry initialized. Cross-zone load balancing active.</div>
+            </div>
+        </section>
 
         <!-- Footer -->
         <footer class="dashboard-footer">
             <p>NTI DevOps Final Project &bull; Terraform &bull; AWS EKS &bull; RDS &bull; Jenkins &bull; ArgoCD &bull; Prometheus &bull; Grafana</p>
         </footer>
+    </div>
+
+    <!-- Topology Modal -->
+    <div id="topology-modal" class="modal-backdrop hidden">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>Cloud-Native Architecture Topology</h3>
+                <button id="btn-close-topology" class="btn-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="topology-diagram">
+                    <div class="top-node">
+                        <span class="node-badge node-client">Public Internet Client</span>
+                        <div class="conn-arrow">&darr;</div>
+                    </div>
+                    <div class="top-node">
+                        <span class="node-badge node-cf">Cloudflare DNS &amp; Edge Proxy</span>
+                        <div class="conn-arrow">&darr;</div>
+                    </div>
+                    <div class="top-node">
+                        <span class="node-badge node-elb">AWS Elastic Load Balancer (Cross-Zone)</span>
+                        <div class="conn-arrow">&darr;</div>
+                    </div>
+                    <div class="top-cluster-row">
+                        <div class="sub-cluster">
+                            <strong>EKS: Worker Node A</strong>
+                            <span class="mono">us-east-1a (10.0.33.204)</span>
+                            <div class="pod-pill">Pod: nti-app-...-cs4xz</div>
+                        </div>
+                        <div class="sub-cluster">
+                            <strong>EKS: Worker Node B</strong>
+                            <span class="mono">us-east-1b (10.0.62.127)</span>
+                            <div class="pod-pill">Pod: nti-app-...-x4tph</div>
+                        </div>
+                    </div>
+                    <div class="conn-arrow-dual">&darr; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &darr;</div>
+                    <div class="bottom-tier-row">
+                        <div class="tier-box">
+                            <strong>AWS RDS Multi-AZ PostgreSQL</strong>
+                            <span class="mono">ntiapp (Port 5432, Private Subnets)</span>
+                        </div>
+                        <div class="tier-box">
+                            <strong>Observability Stack</strong>
+                            <span class="mono">Prometheus + Alertmanager + Grafana</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script src="/static/js/app.js"></script>

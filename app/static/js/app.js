@@ -19,8 +19,10 @@ const elements = {
     dbAuditTbody: document.getElementById('db-audit-tbody'),
     cpuText: document.getElementById('cpu-text'),
     cpuFill: document.getElementById('cpu-fill'),
+    cpuHero: document.getElementById('cpu-hero'),
     memText: document.getElementById('mem-text'),
     memFill: document.getElementById('mem-fill'),
+    memHero: document.getElementById('ram-hero'),
     memSub: document.getElementById('mem-sub'),
     alarmStatusPill: document.getElementById('alarm-status-pill'),
     btnStress15: document.getElementById('btn-stress-15'),
@@ -112,8 +114,8 @@ function drawTelemetryChart() {
         ctx.fill();
     }
 
-    drawSeries('mem', '#9a7bde', 'rgba(154, 123, 222, 0.12)');
-    drawSeries('cpu', '#4d80e4', 'rgba(77, 128, 228, 0.18)');
+    drawSeries('mem', '#22d3ee', 'rgba(34, 211, 238, 0.12)');
+    drawSeries('cpu', '#a78bfa', 'rgba(167, 139, 250, 0.15)');
 }
 
 // Render audit records in the database table
@@ -168,25 +170,33 @@ async function fetchTelemetry() {
             renderAuditTable(data.database.recent_visits);
         }
 
-        // CPU & Memory Telemetry
+        // CPU & Memory Telemetry (hero tiles + gauge rings)
         const cpuVal = Math.round(data.system.cpu_percent);
         const memVal = Math.round(data.system.memory_percent);
+        const GAUGE_C = 2 * Math.PI * 34;
+        const setGauge = (circle, pct) => {
+            circle.style.strokeDashoffset = (GAUGE_C * (1 - Math.min(pct, 100) / 100)).toFixed(1);
+        };
 
         elements.cpuText.textContent = `${cpuVal}%`;
-        elements.cpuFill.style.width = `${Math.min(cpuVal, 100)}%`;
         elements.memText.textContent = `${memVal}%`;
-        elements.memFill.style.width = `${Math.min(memVal, 100)}%`;
-        elements.memSub.textContent = `${data.system.memory_used_mb} MB / ${data.system.memory_total_mb} MB`;
+        elements.cpuHero.textContent = `${cpuVal}%`;
+        elements.memHero.textContent = `${memVal}%`;
+        setGauge(elements.cpuFill, cpuVal);
+        setGauge(elements.memFill, memVal);
+        elements.memSub.textContent = `${data.system.memory_used_mb} / ${data.system.memory_total_mb} MB`;
 
         // Update Alarm Pill
         if (cpuVal >= 80 || memVal >= 80) {
             elements.alarmStatusPill.className = 'pill-firing';
             elements.alarmStatusPill.textContent = 'ALARM TRIGGERED (>80%)';
             elements.cpuFill.classList.add('fill-danger');
+            elements.memFill.classList.add('fill-danger');
         } else {
             elements.alarmStatusPill.className = 'pill-ok';
             elements.alarmStatusPill.textContent = 'Normal (Below 80%)';
             elements.cpuFill.classList.remove('fill-danger');
+            elements.memFill.classList.remove('fill-danger');
         }
 
         // Record point for sparkline chart
