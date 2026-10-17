@@ -105,13 +105,20 @@
                 </div>
                 <div class="card-body">
                     <ul class="data-list">
-                        <li>
-                            <span class="data-key">Serving Pod</span>
-                            <span class="data-val mono highlight-blue" id="k8s-pod-name">{{ data.pod.name }}</span>
+                        <li class="data-row-stacked">
+                            <div class="stacked-header">
+                                <span class="data-key">Serving Pod (Active Replica)</span>
+                                <button type="button" class="btn-copy-mini" id="btn-copy-pod-name" title="Copy Pod Name">Copy</button>
+                            </div>
+                            <span class="data-val mono highlight-blue word-break" id="k8s-pod-name">{{ data.pod.name }}</span>
                         </li>
                         <li>
                             <span class="data-key">Pod IP</span>
                             <span class="data-val mono" id="k8s-pod-ip">{{ data.pod.ip }}</span>
+                        </li>
+                        <li>
+                            <span class="data-key">Kubernetes Node</span>
+                            <span class="data-val mono word-break" id="k8s-node-host" title="{{ data.pod.node }}">{{ data.pod.node }}</span>
                         </li>
                         <li>
                             <span class="data-key">Namespace</span>
@@ -173,9 +180,12 @@
                             <span class="data-key">Query Latency</span>
                             <span class="data-val mono"><span id="db-latency">{{ data.database.latency_ms }}</span> ms</span>
                         </li>
-                        <li>
-                            <span class="data-key">RDS Host</span>
-                            <span class="data-val mono host-pill" id="db-host" title="{{ data.database.host }}">{{ data.database.host }}</span>
+                        <li class="data-row-stacked">
+                            <div class="stacked-header">
+                                <span class="data-key">RDS Host Endpoint</span>
+                                <button type="button" class="btn-copy-mini" id="btn-copy-db-host" title="Copy DB Host">Copy</button>
+                            </div>
+                            <span class="data-val mono host-pill-full word-break" id="db-host" title="{{ data.database.host }}">{{ data.database.host }}</span>
                         </li>
                         <li>
                             <span class="data-key">Database</span>
@@ -341,48 +351,573 @@
     </div>
 
     <!-- Topology Modal -->
-    <div id="topology-modal" class="modal-backdrop hidden">
-        <div class="modal-card">
+    <div id="topology-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modal-topology-title">
+        <div class="modal-card modal-topology-card">
             <div class="modal-header">
-                <h3>Cloud-Native Architecture Topology</h3>
-                <button id="btn-close-topology" class="btn-close">&times;</button>
+                <div class="modal-title-group">
+                    <div class="modal-icon-badge">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
+                            <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
+                            <line x1="6" y1="6" x2="6.01" y2="6"></line>
+                            <line x1="6" y1="18" x2="6.01" y2="18"></line>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 id="modal-topology-title">Cloud-Native Architecture &amp; System Topology</h3>
+                        <p class="modal-subtitle">NTI DevOps Final Project &bull; AWS EKS &bull; RDS &bull; Jenkins CI &bull; ArgoCD GitOps &bull; Prometheus Stack</p>
+                    </div>
+                </div>
+                <div class="modal-header-actions">
+                    <button id="btn-copy-spec" class="btn btn-sm btn-outline" title="Copy full architecture specification to clipboard">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                        </svg>
+                        <span id="copy-spec-text">Copy Full Spec</span>
+                    </button>
+                    <button id="btn-close-topology" class="btn-close" aria-label="Close modal">&times;</button>
+                </div>
             </div>
-            <div class="modal-body">
-                <div class="topology-diagram">
-                    <div class="top-node">
-                        <span class="node-badge node-client">Public Internet Client</span>
-                        <div class="conn-arrow">&darr;</div>
-                    </div>
-                    <div class="top-node">
-                        <span class="node-badge node-cf">Cloudflare DNS &amp; Edge Proxy</span>
-                        <div class="conn-arrow">&darr;</div>
-                    </div>
-                    <div class="top-node">
-                        <span class="node-badge node-elb">AWS Elastic Load Balancer (Cross-Zone)</span>
-                        <div class="conn-arrow">&darr;</div>
-                    </div>
-                    <div class="top-cluster-row">
-                        <div class="sub-cluster">
-                            <strong>EKS: Worker Node A</strong>
-                            <span class="mono">us-east-1a (10.0.33.204)</span>
-                            <div class="pod-pill">Pod: nti-app-...-cs4xz</div>
+
+            <!-- View Switcher Tabs -->
+            <div class="modal-tabs-bar">
+                <div class="tab-btn-group">
+                    <button class="tab-btn active" data-tab="tab-diagram" id="tab-btn-diagram">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="12" y1="2" x2="12" y2="22"></line>
+                            <path d="m4.93 4.93 14.14 14.14"></path>
+                        </svg>
+                        Interactive Topology Flow
+                    </button>
+                    <button class="tab-btn" data-tab="tab-specification" id="tab-btn-spec">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                            <line x1="16" y1="13" x2="8" y2="13"></line>
+                            <line x1="16" y1="17" x2="8" y2="17"></line>
+                        </svg>
+                        Full Architecture Specification
+                    </button>
+                    <button class="tab-btn" data-tab="tab-matrix" id="tab-btn-matrix">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                            <line x1="3" y1="9" x2="21" y2="9"></line>
+                            <line x1="9" y1="21" x2="9" y2="9"></line>
+                        </svg>
+                        Live Infrastructure Matrix
+                    </button>
+                </div>
+                <div class="tab-search-box">
+                    <input type="text" id="spec-search-input" placeholder="Search architecture (e.g. ArgoCD, RDS)..." class="spec-input mono">
+                </div>
+            </div>
+
+            <div class="modal-body-scrollable">
+                <!-- TAB 1: VISUAL TOPOLOGY FLOW -->
+                <div id="tab-diagram" class="tab-pane active">
+                    <div class="architecture-grid-flow">
+                        <!-- Tier 1: Traffic & Edge -->
+                        <div class="flow-tier tier-edge">
+                            <div class="tier-badge">
+                                <span class="tier-num">01</span>
+                                <span class="tier-title">Public Edge &amp; Ingestion Layer</span>
+                            </div>
+                            <div class="tier-cards">
+                                <div class="arch-card edge-card">
+                                    <div class="arch-card-header">
+                                        <span class="arch-badge badge-client">Clients</span>
+                                        <h4>Public Internet Users</h4>
+                                    </div>
+                                    <p class="arch-desc">Web browsers and automated health probes requesting <code>http://nti.d7m.uk</code></p>
+                                    <div class="arch-tags">
+                                        <span>HTTP / REST</span>
+                                        <span>Port 80</span>
+                                        <span>Global Clients</span>
+                                    </div>
+                                </div>
+                                <div class="flow-connector">&rarr;</div>
+                                <div class="arch-card cf-card">
+                                    <div class="arch-card-header">
+                                        <span class="arch-badge badge-cf">Cloudflare</span>
+                                        <h4>Cloudflare Edge Proxy &amp; Anycast DNS</h4>
+                                    </div>
+                                    <p class="arch-desc">DDoS mitigation, SSL termination, and content-hashed asset caching with automatic cache-busting</p>
+                                    <div class="arch-tags">
+                                        <span>DNS Proxy</span>
+                                        <span>Zero-Lag Asset Cache</span>
+                                        <span>DDoS Shield</span>
+                                    </div>
+                                </div>
+                                <div class="flow-connector">&rarr;</div>
+                                <div class="arch-card elb-card">
+                                    <div class="arch-card-header">
+                                        <span class="arch-badge badge-aws">AWS ELB</span>
+                                        <h4>Elastic Load Balancer</h4>
+                                    </div>
+                                    <p class="arch-desc">Public cross-zone load balancer distributing traffic across multi-AZ EKS worker subnets</p>
+                                    <div class="arch-tags">
+                                        <span>Cross-Zone: Active</span>
+                                        <span>Multi-AZ Subnets</span>
+                                        <span>AWS Managed</span>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <div class="sub-cluster">
-                            <strong>EKS: Worker Node B</strong>
-                            <span class="mono">us-east-1b (10.0.62.127)</span>
-                            <div class="pod-pill">Pod: nti-app-...-x4tph</div>
+
+                        <!-- Tier 2: EKS Compute & Pods -->
+                        <div class="flow-tier tier-compute">
+                            <div class="tier-badge">
+                                <span class="tier-num">02</span>
+                                <span class="tier-title">Kubernetes Compute Tier (AWS EKS v1.30)</span>
+                            </div>
+                            <div class="eks-cluster-box">
+                                <div class="cluster-header-bar">
+                                    <div class="cluster-title">
+                                        <span class="status-indicator status-ok"></span>
+                                        <strong>Cluster: nti-devops-eks</strong>
+                                        <span class="badge badge-outline mono">Kubernetes 1.30</span>
+                                        <span class="badge badge-outline mono">VPC: 10.0.0.0/16</span>
+                                    </div>
+                                    <div class="cluster-subnets">
+                                        <span class="subnet-tag mono">us-east-1a (10.0.32.0/20)</span>
+                                        <span class="subnet-tag mono">us-east-1b (10.0.48.0/20)</span>
+                                    </div>
+                                </div>
+
+                                <div class="nodes-grid">
+                                    <!-- Node A -->
+                                    <div class="node-card">
+                                        <div class="node-header">
+                                            <div>
+                                                <strong>Worker Node A (us-east-1a)</strong>
+                                                <div class="mono text-muted node-ip">Host: ip-10-0-33-204.ec2.internal (t3.medium)</div>
+                                            </div>
+                                            <span class="badge badge-success">READY</span>
+                                        </div>
+                                        <div class="node-pods-container">
+                                            <div class="workload-pod-box">
+                                                <div class="pod-header">
+                                                    <span class="pulse-dot"></span>
+                                                    <strong class="mono text-cyan">Pod: {{ data.pod.name }}</strong>
+                                                </div>
+                                                <div class="pod-details-grid mono">
+                                                    <div>IP: <span>{{ data.pod.ip }}</span></div>
+                                                    <div>Namespace: <span>{{ data.pod.namespace }}</span></div>
+                                                    <div>CPU Limits: <span>500m</span></div>
+                                                    <div>Memory Limits: <span>512Mi</span></div>
+                                                </div>
+                                                <div class="pod-features">
+                                                    <span class="feature-pill">FastAPI Microservice</span>
+                                                    <span class="feature-pill">Downward API</span>
+                                                    <span class="feature-pill">Pod Anti-Affinity</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Node B -->
+                                    <div class="node-card">
+                                        <div class="node-header">
+                                            <div>
+                                                <strong>Worker Node B (us-east-1b)</strong>
+                                                <div class="mono text-muted node-ip">Host: ip-10-0-60-162.ec2.internal (t3.medium)</div>
+                                            </div>
+                                            <span class="badge badge-success">READY</span>
+                                        </div>
+                                        <div class="node-pods-container">
+                                            <div class="workload-pod-box">
+                                                <div class="pod-header">
+                                                    <span class="pulse-dot"></span>
+                                                    <strong class="mono text-cyan">Pod Replica (Multi-AZ Standby)</strong>
+                                                </div>
+                                                <div class="pod-details-grid mono">
+                                                    <div>Namespace: <span>default</span></div>
+                                                    <div>Type: <span>Deployment (2 Replicas)</span></div>
+                                                    <div>Target Port: <span>8000</span></div>
+                                                    <div>HPA Threshold: <span>80% CPU</span></div>
+                                                </div>
+                                                <div class="pod-features">
+                                                    <span class="feature-pill">Zone Redundancy</span>
+                                                    <span class="feature-pill">Zero-Downtime Rollout</span>
+                                                    <span class="feature-pill">High Availability</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Tier 3: Persistence & Secrets -->
+                        <div class="flow-tier tier-persistence">
+                            <div class="tier-badge">
+                                <span class="tier-num">03</span>
+                                <span class="tier-title">Data Persistence &amp; Security Layer</span>
+                            </div>
+                            <div class="persistence-grid">
+                                <div class="arch-card rds-card">
+                                    <div class="arch-card-header">
+                                        <span class="arch-badge badge-db">PostgreSQL 15</span>
+                                        <h4>AWS RDS PostgreSQL (Multi-AZ)</h4>
+                                    </div>
+                                    <p class="arch-desc">Dedicated PostgreSQL relational database running in private isolated subnets with connection health probes and real-time transaction audit logging.</p>
+                                    <ul class="arch-kv mono">
+                                        <li><span>Host:</span> <strong class="text-cyan word-break">{{ data.database.host }}</strong></li>
+                                        <li><span>Database:</span> <strong>{{ data.database.name }}</strong></li>
+                                        <li><span>Port:</span> <strong>5432</strong></li>
+                                        <li><span>Subnet Group:</span> <strong>Private DB Subnets (10.0.64.0/20, 10.0.80.0/20)</strong></li>
+                                        <li><span>Ingress SG:</span> <strong>Port 5432 strictly from EKS Worker Nodes SG</strong></li>
+                                    </ul>
+                                </div>
+
+                                <div class="arch-card secrets-card">
+                                    <div class="arch-card-header">
+                                        <span class="arch-badge badge-sec">Secrets &amp; IAM</span>
+                                        <h4>AWS Secrets Manager &amp; IRSA</h4>
+                                    </div>
+                                    <p class="arch-desc">Database credentials stored securely in AWS Secrets Manager (KMS AES-256) and mounted to pods via IAM Roles for Service Accounts (IRSA).</p>
+                                    <ul class="arch-kv mono">
+                                        <li><span>Secret Name:</span> <strong>nti-app-db-secret</strong></li>
+                                        <li><span>Encryption:</span> <strong>AWS KMS (AES-256)</strong></li>
+                                        <li><span>ServiceAccount:</span> <strong>nti-app-sa</strong></li>
+                                        <li><span>Security Context:</span> <strong>runAsUser: 1000, drop: ALL</strong></li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Tier 4: CI/CD & GitOps Automation Engine -->
+                        <div class="flow-tier tier-automation">
+                            <div class="tier-badge">
+                                <span class="tier-num">04</span>
+                                <span class="tier-title">CI/CD &amp; GitOps Continuous Delivery Engine</span>
+                            </div>
+                            <div class="cicd-flow-container">
+                                <div class="cicd-step">
+                                    <div class="step-badge">1. Code Push</div>
+                                    <div class="step-box">
+                                        <strong>GitHub Repo</strong>
+                                        <span class="mono">abdalrahmanx9/nti-project</span>
+                                        <p>Developer push to branch <code>main</code> triggers webhook</p>
+                                    </div>
+                                </div>
+                                <div class="cicd-arrow">&rarr;</div>
+                                <div class="cicd-step">
+                                    <div class="step-badge">2. Continuous Integration</div>
+                                    <div class="step-box highlight-border-blue">
+                                        <strong>Jenkins Multi-Branch CI</strong>
+                                        <span class="mono">AWS EC2 (98.86.85.33:8080)</span>
+                                        <p>7 Stages: Checkout &rarr; Pytest Coverage &rarr; SonarQube &rarr; Docker Multi-Stage Build &rarr; Trivy CVE Scan</p>
+                                    </div>
+                                </div>
+                                <div class="cicd-arrow">&rarr;</div>
+                                <div class="cicd-step">
+                                    <div class="step-badge">3. Container Registry</div>
+                                    <div class="step-box">
+                                        <strong>AWS ECR</strong>
+                                        <span class="mono">270485099284.dkr</span>
+                                        <p>Immutable image tags pushed with SHA verification</p>
+                                    </div>
+                                </div>
+                                <div class="cicd-arrow">&rarr;</div>
+                                <div class="cicd-step">
+                                    <div class="step-badge">4. GitOps Release Trigger</div>
+                                    <div class="step-box highlight-border-violet">
+                                        <strong>GitOps Repo</strong>
+                                        <span class="mono">abdalrahmanx9/nti-devops-gitops</span>
+                                        <p>Jenkins pushes new release tag into <code>values.yaml</code></p>
+                                    </div>
+                                </div>
+                                <div class="cicd-arrow">&rarr;</div>
+                                <div class="cicd-step">
+                                    <div class="step-badge">5. Continuous Delivery</div>
+                                    <div class="step-box highlight-border-green">
+                                        <strong>ArgoCD Controller</strong>
+                                        <span class="mono">Namespace: argocd</span>
+                                        <p>Declarative Helm sync, drift detection &amp; self-healing rollout</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Tier 5: Observability -->
+                        <div class="flow-tier tier-observability">
+                            <div class="tier-badge">
+                                <span class="tier-num">05</span>
+                                <span class="tier-title">Observability, Metrics &amp; Real-Time Alerting Stack</span>
+                            </div>
+                            <div class="obs-cards-grid">
+                                <div class="arch-card obs-card">
+                                    <div class="arch-card-header">
+                                        <span class="arch-badge badge-prom">Prometheus</span>
+                                        <h4>kube-prometheus-stack</h4>
+                                    </div>
+                                    <p class="arch-desc">Custom ServiceMonitor automatically discovers and scrapes FastAPI <code>/metrics</code> (HTTP counters, latency histograms, DB gauges) every 15s.</p>
+                                    <div class="arch-tags">
+                                        <span>ServiceMonitor</span>
+                                        <span>15s Scrape Interval</span>
+                                        <span>PromQL</span>
+                                    </div>
+                                </div>
+                                <div class="arch-card obs-card">
+                                    <div class="arch-card-header">
+                                        <span class="arch-badge badge-alert">Alertmanager</span>
+                                        <h4>Resource Alarms &amp; SMTP</h4>
+                                    </div>
+                                    <p class="arch-desc">Threshold rules monitor container CPU &gt; 80% and trigger automated incident notifications via Gmail SMTP to <code>d7oom.ahmed99922@gmail.com</code>.</p>
+                                    <div class="arch-tags">
+                                        <span>CPU Threshold: 80%</span>
+                                        <span>Gmail SMTP Alerts</span>
+                                        <span>Active Routing</span>
+                                    </div>
+                                </div>
+                                <div class="arch-card obs-card">
+                                    <div class="arch-card-header">
+                                        <span class="arch-badge badge-graf">Grafana</span>
+                                        <h4>Live Visual Dashboards</h4>
+                                    </div>
+                                    <p class="arch-desc">Interactive dashboards visualizing node cluster saturation, pod memory usage, network ingress/egress, and PostgreSQL query performance.</p>
+                                    <div class="arch-tags">
+                                        <span>Port 3000</span>
+                                        <span>Kubernetes Metrics</span>
+                                        <span>RDS Telemetry</span>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                    <div class="conn-arrow-dual">&darr; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &darr;</div>
-                    <div class="bottom-tier-row">
-                        <div class="tier-box">
-                            <strong>AWS RDS Multi-AZ PostgreSQL</strong>
-                            <span class="mono">ntiapp (Port 5432, Private Subnets)</span>
+                </div>
+
+                <!-- TAB 2: FULL ARCHITECTURE SPECIFICATION (THE FULL CONTENT FIELD) -->
+                <div id="tab-specification" class="tab-pane">
+                    <div class="spec-viewer-wrapper">
+                        <div class="spec-viewer-header">
+                            <div class="spec-doc-meta">
+                                <strong>Technical Specification: NTI Cloud-Native Infrastructure &amp; DevOps Platform</strong>
+                                <span class="mono">Version 2.0 &bull; Environment: AWS us-east-1 &bull; GitOps Ready</span>
+                            </div>
+                            <button id="btn-copy-spec-inner" class="btn btn-sm btn-primary">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                </svg>
+                                <span>Copy Complete Specification</span>
+                            </button>
                         </div>
-                        <div class="tier-box">
-                            <strong>Observability Stack</strong>
-                            <span class="mono">Prometheus + Alertmanager + Grafana</span>
+                        <div class="spec-document-field" id="full-architecture-text-field">
+                            <!-- Section 1 -->
+                            <div class="spec-section">
+                                <div class="spec-section-header">
+                                    <span class="spec-sec-num">1.0</span>
+                                    <h4>System Overview &amp; Architecture Principles</h4>
+                                </div>
+                                <p>The NTI DevOps Final Project implements an enterprise-grade, cloud-native microservice architecture designed for high availability, automated security enforcement, zero-downtime continuous deployment, and deep observability.</p>
+                                <ul class="spec-bullets">
+                                    <li><strong>Separation of CI and CD</strong>: Jenkins is strictly responsible for code integration, automated unit testing with code coverage, quality gate enforcement, vulnerability scanning, and updating the GitOps repository. Jenkins has <em>zero</em> direct access or credentials to the Kubernetes cluster.</li>
+                                    <li><strong>GitOps as Single Source of Truth</strong>: ArgoCD operates inside the EKS cluster, continuously monitoring the dedicated <code>nti-devops-gitops</code> repository for Helm manifest changes. ArgoCD reconciles desired Git state with live Kubernetes state, providing automated drift detection and self-healing.</li>
+                                    <li><strong>Multi-AZ Redundancy</strong>: Microservices and databases are distributed across AWS Availability Zones (<code>us-east-1a</code> and <code>us-east-1b</code>) with Pod Anti-Affinity rules ensuring survivability against datacenter-level failures.</li>
+                                </ul>
+                            </div>
+
+                            <!-- Section 2 -->
+                            <div class="spec-section">
+                                <div class="spec-section-header">
+                                    <span class="spec-sec-num">2.0</span>
+                                    <h4>Modular Infrastructure as Code (Terraform)</h4>
+                                </div>
+                                <p>The complete cloud infrastructure is provisioned reproducibly using modular Terraform 1.10+ with remote state management and native S3 state locking.</p>
+                                <div class="spec-table-box">
+                                    <table class="spec-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Module</th>
+                                                <th>Target Resources</th>
+                                                <th>Configuration &amp; Security Highlights</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr>
+                                                <td class="mono font-bold">terraform/modules/vpc</td>
+                                                <td>AWS VPC (10.0.0.0/16)</td>
+                                                <td>6 Subnets: 2 Public (NAT GW, ALB), 2 Private Worker (EKS), 2 Private DB (RDS). ELB tags enabled.</td>
+                                            </tr>
+                                            <tr>
+                                                <td class="mono font-bold">terraform/modules/eks</td>
+                                                <td>AWS EKS v1.30 Cluster</td>
+                                                <td>Managed Node Group (2x t3.medium), OIDC Provider for IRSA, CoreDNS, Kube-Proxy, VPC-CNI.</td>
+                                            </tr>
+                                            <tr>
+                                                <td class="mono font-bold">terraform/modules/rds</td>
+                                                <td>AWS RDS PostgreSQL 15</td>
+                                                <td>Multi-AZ in DB Subnet Group, Storage Auto-scaling, SG restricted strictly to EKS Worker Nodes on port 5432.</td>
+                                            </tr>
+                                            <tr>
+                                                <td class="mono font-bold">terraform/modules/ec2_jenkins</td>
+                                                <td>Jenkins CI Server</td>
+                                                <td>Ubuntu 22.04 LTS (t3.large), 30GB gp3 EBS, IAM instance profile for ECR authentication.</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- Section 3 -->
+                            <div class="spec-section">
+                                <div class="spec-section-header">
+                                    <span class="spec-sec-num">3.0</span>
+                                    <h4>Automated CI Pipeline (Jenkins Multi-Branch)</h4>
+                                </div>
+                                <p>Every code commit pushed to GitHub automatically triggers the Jenkins pipeline executing 7 rigorous quality and security stages:</p>
+                                <ol class="spec-numbered">
+                                    <li><strong>Stage 1: Checkout SCM</strong> &mdash; Clones git repository commit with SHA verification.</li>
+                                    <li><strong>Stage 2: Static Code Analysis &amp; Pytest</strong> &mdash; Runs <code>ruff</code> code linter and executes unit tests with <code>pytest --cov</code> code coverage report.</li>
+                                    <li><strong>Stage 3: SonarQube Quality Gate</strong> &mdash; Scans Python code for security hotspots, bugs, and code smells.</li>
+                                    <li><strong>Stage 4: Docker Multi-Stage Build</strong> &mdash; Builds lightweight, non-root production container images tagged with <code>${BUILD_NUMBER}-${GIT_COMMIT.take(7)}</code>.</li>
+                                    <li><strong>Stage 5: Trivy Security Scan</strong> &mdash; Halts pipeline on HIGH or CRITICAL CVE vulnerabilities in OS packages or Python libraries.</li>
+                                    <li><strong>Stage 6: AWS ECR Push</strong> &mdash; Authenticates with AWS ECR using IAM and pushes versioned image tags to <code>270485099284.dkr.ecr.us-east-1.amazonaws.com/nti-devops-app</code>.</li>
+                                    <li><strong>Stage 7: Automated GitOps Push</strong> &mdash; Clones <code>nti-devops-gitops</code>, updates <code>image.tag</code> in <code>values.yaml</code>, and commits with authenticated credentials back to GitHub.</li>
+                                </ol>
+                            </div>
+
+                            <!-- Section 4 -->
+                            <div class="spec-section">
+                                <div class="spec-section-header">
+                                    <span class="spec-sec-num">4.0</span>
+                                    <h4>Continuous Delivery &amp; GitOps Engine (ArgoCD &amp; Helm)</h4>
+                                </div>
+                                <p>ArgoCD monitors the declarative Helm chart repository (<code>charts/nti-app</code>) and deploys changes to the EKS cluster with zero downtime:</p>
+                                <ul class="spec-bullets">
+                                    <li><strong>Automated Sync Policy</strong>: ArgoCD polls the GitOps repository every 3 minutes (or receives webhook) and triggers declarative reconciliation.</li>
+                                    <li><strong>Self-Healing &amp; Drift Correction</strong>: Manual changes applied with <code>kubectl</code> are automatically detected and overwritten to match the version in Git.</li>
+                                    <li><strong>Rolling Updates</strong>: Kubernetes <code>RollingUpdate</code> strategy ensures 100% service availability with zero dropped requests during new container rollouts.</li>
+                                </ul>
+                            </div>
+
+                            <!-- Section 5 -->
+                            <div class="spec-section">
+                                <div class="spec-section-header">
+                                    <span class="spec-sec-num">5.0</span>
+                                    <h4>Application Architecture, Security &amp; Downward API</h4>
+                                </div>
+                                <p>The backend application is built using Python FastAPI and Uvicorn with deep Kubernetes runtime introspection:</p>
+                                <ul class="spec-bullets">
+                                    <li><strong>Downward API Injection</strong>: The Kubernetes Downward API exposes <code>spec.nodeName</code>, <code>status.podIP</code>, and <code>metadata.name</code> as environment variables to the container for real-time telemetry display.</li>
+                                    <li><strong>Container Hardening</strong>: Runs as non-root user (UID 1000), drops ALL Linux capabilities, and mounts read-only root where applicable.</li>
+                                    <li><strong>Asset Versioning &amp; Cache-Busting</strong>: Computes MD5 content hashes of CSS/JS assets at runtime (<code>?v=ff7a9a4e62</code>), guaranteeing zero cache lag across Cloudflare CDN edge nodes.</li>
+                                </ul>
+                            </div>
+
+                            <!-- Section 6 -->
+                            <div class="spec-section">
+                                <div class="spec-section-header">
+                                    <span class="spec-sec-num">6.0</span>
+                                    <h4>Observability, Telemetry &amp; Alertmanager Alarms</h4>
+                                </div>
+                                <p>Full-spectrum observability is achieved using the <code>kube-prometheus-stack</code>:</p>
+                                <ul class="spec-bullets">
+                                    <li><strong>Prometheus ServiceMonitor</strong>: Automatically discovers application pods and scrapes <code>/metrics</code> (HTTP request counters, duration histograms, DB connection status) every 15 seconds.</li>
+                                    <li><strong>Alertmanager Notifications</strong>: Configured with alarm rules that trigger when pod CPU or memory exceeds 80%. Automatically routes notifications via Gmail SMTP to <code>d7oom.ahmed99922@gmail.com</code>.</li>
+                                    <li><strong>Grafana Dashboards</strong>: Pre-configured dashboards monitoring cluster compute saturation, pod restarts, and PostgreSQL query performance.</li>
+                                </ul>
+                            </div>
                         </div>
+                    </div>
+                </div>
+
+                <!-- TAB 3: LIVE COMPONENT MATRIX -->
+                <div id="tab-matrix" class="tab-pane">
+                    <div class="matrix-table-wrap">
+                        <table class="matrix-table">
+                            <thead>
+                                <tr>
+                                    <th>Tier / Component</th>
+                                    <th>Technology</th>
+                                    <th>Role / Function</th>
+                                    <th>Live Endpoint / Host</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><strong>Edge Routing</strong></td>
+                                    <td>Cloudflare Proxy</td>
+                                    <td>Anycast DNS, DDoS mitigation &amp; CDN cache</td>
+                                    <td class="mono">http://nti.d7m.uk</td>
+                                    <td><span class="badge badge-success">ACTIVE &bull; PROXIED</span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Load Balancer</strong></td>
+                                    <td>AWS Elastic Load Balancer</td>
+                                    <td>Cross-Zone Traffic Ingestion to EKS</td>
+                                    <td class="mono">aws-elb.us-east-1.elb.amazonaws.com</td>
+                                    <td><span class="badge badge-success">ACTIVE &bull; MULTI-AZ</span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Compute Cluster</strong></td>
+                                    <td>AWS EKS v1.30</td>
+                                    <td>Managed Kubernetes Container Orchestration</td>
+                                    <td class="mono">nti-devops-eks (us-east-1)</td>
+                                    <td><span class="badge badge-success">HEALTHY &bull; 2 NODES</span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Worker Node A</strong></td>
+                                    <td>AWS EC2 (t3.medium)</td>
+                                    <td>Kubernetes Worker Node in us-east-1a</td>
+                                    <td class="mono word-break">ip-10-0-33-204.ec2.internal</td>
+                                    <td><span class="badge badge-success">READY</span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Worker Node B</strong></td>
+                                    <td>AWS EC2 (t3.medium)</td>
+                                    <td>Kubernetes Worker Node in us-east-1b</td>
+                                    <td class="mono word-break">ip-10-0-60-162.ec2.internal</td>
+                                    <td><span class="badge badge-success">READY</span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Active Pod Origin</strong></td>
+                                    <td>FastAPI Microservice</td>
+                                    <td>Serving Pod with Downward API Telemetry</td>
+                                    <td class="mono word-break text-cyan" id="matrix-pod-name">{{ data.pod.name }}</td>
+                                    <td><span class="badge badge-success">RUNNING (1/1)</span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Relational Database</strong></td>
+                                    <td>AWS RDS PostgreSQL 15</td>
+                                    <td>Persistent Multi-AZ Database with Audit Records</td>
+                                    <td class="mono word-break text-cyan" id="matrix-db-host">{{ data.database.host }}</td>
+                                    <td>
+                                        {% if data.database.healthy %}
+                                            <span class="badge badge-success">CONNECTED &bull; {{ data.database.latency_ms }} ms</span>
+                                        {% else %}
+                                            <span class="badge badge-warning">OFFLINE</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Continuous Integration</strong></td>
+                                    <td>Jenkins Multi-Branch</td>
+                                    <td>Automated 7-stage CI pipeline with Trivy &amp; ECR</td>
+                                    <td class="mono">http://98.86.85.33:8080</td>
+                                    <td><span class="badge badge-success">ACTIVE &bull; BUILD #33</span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Continuous Delivery</strong></td>
+                                    <td>ArgoCD Controller</td>
+                                    <td>Declarative GitOps sync &amp; drift correction</td>
+                                    <td class="mono">argocd-server.argocd:443</td>
+                                    <td><span class="badge badge-success">SYNCED &bull; HEALTHY</span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Observability</strong></td>
+                                    <td>kube-prometheus-stack</td>
+                                    <td>ServiceMonitor scraping, Alertmanager &amp; Grafana</td>
+                                    <td class="mono">prometheus-operated:9090 / grafana:3000</td>
+                                    <td><span class="badge badge-success">ACTIVE &bull; 15s SCRAPE</span></td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>

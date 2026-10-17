@@ -153,6 +153,12 @@ async function fetchTelemetry() {
         elements.k8sPodName.textContent = data.pod.name;
         elements.k8sPodIp.textContent = data.pod.ip;
         elements.k8sNamespace.textContent = data.pod.namespace;
+        const nodeHostElem = document.getElementById('k8s-node-host');
+        if (nodeHostElem) nodeHostElem.textContent = data.pod.node;
+        const matrixPodElem = document.getElementById('matrix-pod-name');
+        if (matrixPodElem) matrixPodElem.textContent = data.pod.name;
+        const matrixDbElem = document.getElementById('matrix-db-host');
+        if (matrixDbElem) matrixDbElem.textContent = data.database.host;
 
         // DB Status
         if (data.database.healthy) {
@@ -359,7 +365,7 @@ elements.btnClearLogs.addEventListener('click', () => {
     appendLog('Platform event stream cleared.', 'SYS');
 });
 
-// 5. Topology Modal controls
+// 5. Topology Modal controls & tab navigation
 elements.btnOpenTopology.addEventListener('click', () => {
     elements.topologyModal.classList.remove('hidden');
 });
@@ -371,6 +377,82 @@ elements.topologyModal.addEventListener('click', (e) => {
         elements.topologyModal.classList.add('hidden');
     }
 });
+
+// Modal tab switcher
+const tabButtons = document.querySelectorAll('.tab-btn');
+const tabPanes = document.querySelectorAll('.tab-pane');
+tabButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+        const targetTab = btn.getAttribute('data-tab');
+        tabButtons.forEach(b => b.classList.remove('active'));
+        tabPanes.forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        const pane = document.getElementById(targetTab);
+        if (pane) pane.classList.add('active');
+    });
+});
+
+// Copy full architecture specification
+function copyArchitectureSpecification() {
+    const specElem = document.getElementById('full-architecture-text-field');
+    if (!specElem) return;
+    const text = specElem.innerText || specElem.textContent;
+    navigator.clipboard.writeText(text).then(() => {
+        const copyBtnText = document.getElementById('copy-spec-text');
+        if (copyBtnText) copyBtnText.textContent = 'Copied to Clipboard!';
+        appendLog('Full architecture specification copied to clipboard.', 'CLIPBOARD');
+        setTimeout(() => {
+            if (copyBtnText) copyBtnText.textContent = 'Copy Full Spec';
+        }, 2500);
+    }).catch(() => {
+        appendLog('Failed to copy spec directly. Please select text manually.', 'WARN');
+    });
+}
+
+const btnCopySpec = document.getElementById('btn-copy-spec');
+if (btnCopySpec) btnCopySpec.addEventListener('click', copyArchitectureSpecification);
+const btnCopySpecInner = document.getElementById('btn-copy-spec-inner');
+if (btnCopySpecInner) btnCopySpecInner.addEventListener('click', copyArchitectureSpecification);
+
+// Copy buttons for long dashboard fields
+const btnCopyPod = document.getElementById('btn-copy-pod-name');
+if (btnCopyPod) {
+    btnCopyPod.addEventListener('click', () => {
+        const val = elements.k8sPodName ? elements.k8sPodName.textContent : '';
+        navigator.clipboard.writeText(val).then(() => {
+            btnCopyPod.textContent = 'Copied!';
+            setTimeout(() => { btnCopyPod.textContent = 'Copy'; }, 2000);
+        });
+    });
+}
+const btnCopyDb = document.getElementById('btn-copy-db-host');
+if (btnCopyDb) {
+    btnCopyDb.addEventListener('click', () => {
+        const val = elements.dbHost ? elements.dbHost.textContent : '';
+        navigator.clipboard.writeText(val).then(() => {
+            btnCopyDb.textContent = 'Copied!';
+            setTimeout(() => { btnCopyDb.textContent = 'Copy'; }, 2000);
+        });
+    });
+}
+
+// Search filter for specification and matrix
+const specSearch = document.getElementById('spec-search-input');
+if (specSearch) {
+    specSearch.addEventListener('input', (e) => {
+        const query = e.target.value.toLowerCase().trim();
+        const sections = document.querySelectorAll('.spec-section');
+        sections.forEach(sec => {
+            const text = sec.textContent.toLowerCase();
+            sec.style.display = (!query || text.includes(query)) ? '' : 'none';
+        });
+        const rows = document.querySelectorAll('.matrix-table tbody tr');
+        rows.forEach(r => {
+            const text = r.textContent.toLowerCase();
+            r.style.display = (!query || text.includes(query)) ? '' : 'none';
+        });
+    });
+}
 
 // Start periodic polling every 2.5 seconds
 setInterval(fetchTelemetry, 2500);
