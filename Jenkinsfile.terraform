@@ -8,6 +8,9 @@ pipeline {
         ansiColor('xterm')
     }
 
+    // Manual execution only: no automated triggers, GitHub webhooks, or SCM polling are defined.
+    // Infrastructure changes must be intentionally triggered via "Build with Parameters".
+
     parameters {
         choice(
             name: 'TERRAFORM_ACTION',

@@ -23,9 +23,9 @@ if (adminUser == null) {
     println("--> Admin account initialized from local host secret.")
 }
 
-// 3. Configure Authorization Strategy (Allow anonymous read for GitHub webhook push notifications)
+// 3. Configure Authorization Strategy (Require authentication for all dashboard access)
 def strategy = new FullControlOnceLoggedInAuthorizationStrategy()
-strategy.setAllowAnonymousRead(true)
+strategy.setAllowAnonymousRead(false)
 instance.setAuthorizationStrategy(strategy)
 
 instance.save()
