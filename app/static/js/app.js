@@ -1,4 +1,4 @@
-// Client-side telemetry updater and interactive controls
+// Client-side telemetry updater, real-time sparkline chart, and interactive multi-pod dispatcher
 
 const elements = {
     overallStatus: document.getElementById('overall-status'),
@@ -15,18 +15,36 @@ const elements = {
     btnTestDb: document.getElementById('btn-test-db'),
     spinnerDb: document.getElementById('spinner-db'),
     dbFeedback: document.getElementById('db-feedback'),
+    dbTotalCount: document.getElementById('db-total-count'),
+    dbAuditTbody: document.getElementById('db-audit-tbody'),
     cpuText: document.getElementById('cpu-text'),
     cpuFill: document.getElementById('cpu-fill'),
     memText: document.getElementById('mem-text'),
     memFill: document.getElementById('mem-fill'),
     memSub: document.getElementById('mem-sub'),
     alarmStatusPill: document.getElementById('alarm-status-pill'),
-    btnStressTest: document.getElementById('btn-stress-test'),
-    spinnerStress: document.getElementById('spinner-stress'),
+    btnStress15: document.getElementById('btn-stress-15'),
+    btnStress45: document.getElementById('btn-stress-45'),
+    btnStressStop: document.getElementById('btn-stress-stop'),
     stressFeedback: document.getElementById('stress-feedback'),
     eventLogContainer: document.getElementById('event-log-container'),
     btnClearLogs: document.getElementById('btn-clear-logs'),
+    btnDispatchTest: document.getElementById('btn-dispatch-test'),
+    spinnerDispatch: document.getElementById('spinner-dispatch'),
+    trafficResultsContainer: document.getElementById('traffic-results-container'),
+    barPodA: document.getElementById('bar-pod-a'),
+    barPodB: document.getElementById('bar-pod-b'),
+    labelPodA: document.getElementById('label-pod-a'),
+    labelPodB: document.getElementById('label-pod-b'),
+    telemetryCanvas: document.getElementById('telemetry-chart'),
+    btnOpenTopology: document.getElementById('btn-open-topology'),
+    btnCloseTopology: document.getElementById('btn-close-topology'),
+    topologyModal: document.getElementById('topology-modal'),
 };
+
+let previousPodName = null;
+const historyPoints = [];
+const MAX_HISTORY = 20;
 
 function appendLog(message, type = 'INFO') {
     const timeStr = new Date().toLocaleTimeString();
@@ -37,12 +55,94 @@ function appendLog(message, type = 'INFO') {
     elements.eventLogContainer.scrollTop = elements.eventLogContainer.scrollHeight;
 }
 
+// Draw real-time sparkline chart on HTML5 canvas
+function drawTelemetryChart() {
+    const canvas = elements.telemetryCanvas;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const width = canvas.width;
+    const height = canvas.height;
+
+    ctx.clearRect(0, 0, width, height);
+
+    // Draw background grid lines
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+    ctx.lineWidth = 1;
+    for (let y = 0; y <= height; y += height / 4) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(width, y);
+        ctx.stroke();
+    }
+
+    // Draw 80% Alarm Threshold line
+    const y80 = height * (1 - 0.80);
+    ctx.strokeStyle = 'rgba(244, 63, 94, 0.6)';
+    ctx.setLineDash([4, 4]);
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(0, y80);
+    ctx.lineTo(width, y80);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    if (historyPoints.length < 2) return;
+
+    const stepX = width / (MAX_HISTORY - 1);
+
+    // Helper to draw a line series
+    function drawSeries(key, strokeColor, fillColor) {
+        ctx.beginPath();
+        historyPoints.forEach((pt, idx) => {
+            const x = idx * stepX;
+            const y = height * (1 - Math.min(pt[key], 100) / 100);
+            if (idx === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        });
+
+        ctx.strokeStyle = strokeColor;
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+
+        // Fill area under curve
+        ctx.lineTo((historyPoints.length - 1) * stepX, height);
+        ctx.lineTo(0, height);
+        ctx.closePath();
+        ctx.fillStyle = fillColor;
+        ctx.fill();
+    }
+
+    drawSeries('mem', '#8b5cf6', 'rgba(139, 92, 246, 0.12)');
+    drawSeries('cpu', '#06b6d4', 'rgba(6, 182, 212, 0.18)');
+}
+
+// Render audit records in the database table
+function renderAuditTable(records) {
+    if (!records || records.length === 0) return;
+    elements.dbAuditTbody.innerHTML = records.map(r => `
+        <tr>
+            <td class="mono font-bold text-cyan">#${r.id}</td>
+            <td class="mono">${r.timestamp}</td>
+            <td class="mono"><span class="badge-mini">${r.pod_name}</span></td>
+            <td class="mono">${r.client_ip}</td>
+        </tr>
+    `).join('');
+}
+
 // Fetch live telemetry from /api/status
 async function fetchTelemetry() {
     try {
-        const response = await fetch('/api/status');
+        const response = await fetch('/api/status?t=' + Date.now());
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json();
+
+        // Check if traffic routed to a new pod
+        if (previousPodName && previousPodName !== data.pod.name) {
+            elements.podDisplay.classList.add('flash-change');
+            appendLog(`Traffic routed to different pod: <strong>${data.pod.name}</strong> on node ${data.pod.node}`, 'ROUTER');
+            setTimeout(() => elements.podDisplay.classList.remove('flash-change'), 2000);
+        }
+        previousPodName = data.pod.name;
 
         // Uptime & Pod Metadata
         elements.uptimeDisplay.textContent = data.uptime_formatted;
@@ -64,120 +164,204 @@ async function fetchTelemetry() {
         elements.dbHost.textContent = data.database.host;
         elements.dbName.textContent = data.database.name;
 
-        // CPU & Memory
-        const cpu = data.system.cpu_percent;
-        const mem = data.system.memory_percent;
-
-        elements.cpuText.textContent = `${cpu}%`;
-        elements.cpuFill.style.width = `${Math.min(cpu, 100)}%`;
-        if (cpu >= 80) {
-            elements.cpuFill.classList.add('fill-warn');
-        } else {
-            elements.cpuFill.classList.remove('fill-warn');
+        if (data.database.recent_visits && data.database.recent_visits.length > 0) {
+            renderAuditTable(data.database.recent_visits);
         }
 
-        elements.memText.textContent = `${mem}%`;
-        elements.memFill.style.width = `${Math.min(mem, 100)}%`;
+        // CPU & Memory Telemetry
+        const cpuVal = Math.round(data.system.cpu_percent);
+        const memVal = Math.round(data.system.memory_percent);
+
+        elements.cpuText.textContent = `${cpuVal}%`;
+        elements.cpuFill.style.width = `${Math.min(cpuVal, 100)}%`;
+        elements.memText.textContent = `${memVal}%`;
+        elements.memFill.style.width = `${Math.min(memVal, 100)}%`;
         elements.memSub.textContent = `${data.system.memory_used_mb} MB / ${data.system.memory_total_mb} MB`;
-        if (mem >= 80) {
-            elements.memFill.classList.add('fill-warn');
-        } else {
-            elements.memFill.classList.remove('fill-warn');
-        }
 
-        // 80% Alarm Indicator
-        if (cpu >= 80 || mem >= 80) {
+        // Update Alarm Pill
+        if (cpuVal >= 80 || memVal >= 80) {
             elements.alarmStatusPill.className = 'pill-firing';
-            elements.alarmStatusPill.textContent = 'ALARM FIRING (>80%)';
+            elements.alarmStatusPill.textContent = 'ALARM TRIGGERED (>80%)';
+            elements.cpuFill.classList.add('fill-danger');
         } else {
             elements.alarmStatusPill.className = 'pill-ok';
-            elements.alarmStatusPill.textContent = 'Normal';
+            elements.alarmStatusPill.textContent = 'Normal (Below 80%)';
+            elements.cpuFill.classList.remove('fill-danger');
         }
 
-    } catch (err) {
-        console.warn('Failed to fetch telemetry:', err);
+        // Record point for sparkline chart
+        historyPoints.push({ cpu: cpuVal, mem: memVal });
+        if (historyPoints.length > MAX_HISTORY) historyPoints.shift();
+        drawTelemetryChart();
+
+    } catch (e) {
+        elements.overallStatus.innerHTML = '<span class="status-indicator status-warn"></span> Unreachable';
+        appendLog(`Telemetry poll failed: ${e.message}`, 'WARN');
     }
 }
 
-// Test DB Query handler
+// 1. Dispatch 10 Parallel Requests to demonstrate Load Balancing across pods
+elements.btnDispatchTest.addEventListener('click', async () => {
+    elements.btnDispatchTest.disabled = true;
+    elements.spinnerDispatch.classList.remove('hidden');
+    elements.trafficResultsContainer.classList.add('hidden');
+    appendLog('Dispatching 10 parallel asynchronous requests to demonstrate multi-pod load balancing...', 'TRAFFIC');
+
+    try {
+        const promises = Array.from({ length: 10 }, (_, i) => 
+            fetch('/api/status?burst=' + i + '_' + Date.now()).then(r => r.json())
+        );
+
+        const results = await Promise.all(promises);
+        const counts = {};
+        results.forEach(res => {
+            const pod = res.pod.name;
+            counts[pod] = (counts[pod] || 0) + 1;
+        });
+
+        const pods = Object.keys(counts);
+        elements.trafficResultsContainer.classList.remove('hidden');
+
+        if (pods.length >= 2) {
+            const countA = counts[pods[0]];
+            const countB = counts[pods[1]];
+            const pctA = Math.round((countA / 10) * 100);
+            const pctB = Math.round((countB / 10) * 100);
+
+            elements.barPodA.style.width = `${pctA}%`;
+            elements.barPodB.style.width = `${pctB}%`;
+            elements.labelPodA.innerHTML = `<strong>${pods[0].split('-').slice(-2).join('-')}</strong>: ${countA} reqs (${pctA}%)`;
+            elements.labelPodB.innerHTML = `<strong>${pods[1].split('-').slice(-2).join('-')}</strong>: ${countB} reqs (${pctB}%)`;
+            appendLog(`Load balancing active: ${pods[0]} handled ${countA} reqs, ${pods[1]} handled ${countB} reqs.`, 'SUCCESS');
+        } else {
+            const singlePod = pods[0] || 'Unknown';
+            elements.barPodA.style.width = '100%';
+            elements.barPodB.style.width = '0%';
+            elements.labelPodA.textContent = `${singlePod}: 10 reqs (100%)`;
+            elements.labelPodB.textContent = '';
+            appendLog(`All requests answered by ${singlePod} (active socket pool).`, 'INFO');
+        }
+    } catch (e) {
+        appendLog(`Traffic dispatch error: ${e.message}`, 'ERROR');
+    } finally {
+        elements.btnDispatchTest.disabled = false;
+        elements.spinnerDispatch.classList.add('hidden');
+    }
+});
+
+// 2. Write Audit Record to PostgreSQL
 elements.btnTestDb.addEventListener('click', async () => {
-    elements.spinnerDb.classList.remove('hidden');
     elements.btnTestDb.disabled = true;
+    elements.spinnerDb.classList.remove('hidden');
     elements.dbFeedback.className = 'feedback-msg hidden';
 
     try {
         const res = await fetch('/api/db-query', { method: 'POST' });
-        const json = await res.json();
-        elements.dbFeedback.classList.remove('hidden');
-        if (json.success) {
+        const result = await res.json();
+
+        if (result.success) {
             elements.dbFeedback.className = 'feedback-msg success';
-            elements.dbFeedback.textContent = `Recorded successfully. Total DB visits: ${json.total_visits} (Query took ${json.query_latency_ms} ms)`;
-            appendLog(`PostgreSQL Write/Read success (Total: ${json.total_visits}, Latency: ${json.query_latency_ms}ms)`, 'DB');
+            elements.dbFeedback.textContent = `Transaction successful! Total visits: ${result.total_visits} (${result.query_latency_ms}ms) from ${result.origin_pod}`;
+            elements.dbTotalCount.textContent = `${result.total_visits} Records Synced`;
+            if (result.recent_visits) {
+                renderAuditTable(result.recent_visits);
+            }
+            appendLog(`PostgreSQL Write: Inserted record #${result.total_visits} via pod ${result.origin_pod} in ${result.query_latency_ms}ms`, 'DATABASE');
         } else {
             elements.dbFeedback.className = 'feedback-msg error';
-            elements.dbFeedback.textContent = json.message;
-            appendLog(`DB operation failed: ${json.message}`, 'WARN');
+            elements.dbFeedback.textContent = result.message;
+            appendLog(`Database Write Error: ${result.message}`, 'ERROR');
         }
     } catch (e) {
         elements.dbFeedback.className = 'feedback-msg error';
-        elements.dbFeedback.textContent = `Request error: ${e.message}`;
-        appendLog(`Network error contacting /api/db-query: ${e.message}`, 'ERROR');
+        elements.dbFeedback.textContent = `Request failed: ${e.message}`;
     } finally {
-        elements.spinnerDb.classList.add('hidden');
         elements.btnTestDb.disabled = false;
-        fetchTelemetry();
+        elements.spinnerDb.classList.add('hidden');
     }
 });
 
-// Simulate Load handler
-elements.btnStressTest.addEventListener('click', async () => {
-    elements.spinnerStress.classList.remove('hidden');
-    elements.btnStressTest.disabled = true;
+// 3. Simulated Load Testing Handlers
+let stressTimer = null;
+
+async function triggerLoadTest(durationSec) {
+    elements.btnStress15.disabled = true;
+    elements.btnStress45.disabled = true;
+    elements.btnStressStop.classList.remove('hidden');
     elements.stressFeedback.className = 'feedback-msg hidden';
+
+    appendLog(`Simulated CPU & RAM load test started for ${durationSec}s. Target: >80% to test HPA scaling.`, 'STRESS');
 
     try {
         const res = await fetch('/api/simulate-load', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ duration_seconds: 45 })
+            body: JSON.stringify({ duration_seconds: durationSec })
         });
-        const json = await res.json();
-        elements.stressFeedback.className = 'feedback-msg success';
-        elements.stressFeedback.textContent = json.message;
-        elements.stressFeedback.classList.remove('hidden');
-        appendLog(`Simulated CPU & RAM load initiated for 45s (Target: >80% threshold).`, 'STRESS');
+        const data = await res.json();
+        elements.stressFeedback.className = 'feedback-msg info';
+        elements.stressFeedback.textContent = data.message;
 
-        // Countdown button state & immediate alarm pill
         elements.alarmStatusPill.className = 'pill-firing';
         elements.alarmStatusPill.textContent = 'ALARM TRIGGERED (>80%)';
 
-        let timeLeft = 45;
-        const interval = setInterval(() => {
+        let timeLeft = durationSec;
+        clearInterval(stressTimer);
+        stressTimer = setInterval(() => {
             timeLeft--;
-            elements.btnStressTest.textContent = `🔥 Simulating Load (${timeLeft}s remaining)...`;
+            elements.stressFeedback.textContent = `🔥 Stress Active: ${timeLeft}s remaining. Monitoring metrics...`;
             if (timeLeft <= 0) {
-                clearInterval(interval);
-                elements.btnStressTest.textContent = 'Simulate Load (>80% Stress)';
-                elements.btnStressTest.disabled = false;
-                elements.spinnerStress.classList.add('hidden');
-                appendLog(`Simulated load window completed. Cooldown stabilization active.`, 'INFO');
+                stopStressUI();
+                appendLog('Simulated load test window concluded. Stabilization cooldown active.', 'STRESS');
             }
         }, 1000);
-
     } catch (e) {
         elements.stressFeedback.className = 'feedback-msg error';
-        elements.stressFeedback.textContent = `Failed to trigger load: ${e.message}`;
-        elements.btnStressTest.disabled = false;
-        elements.spinnerStress.classList.add('hidden');
+        elements.stressFeedback.textContent = `Failed: ${e.message}`;
+        stopStressUI();
+    }
+}
+
+function stopStressUI() {
+    clearInterval(stressTimer);
+    elements.btnStress15.disabled = false;
+    elements.btnStress45.disabled = false;
+    elements.btnStressStop.classList.add('hidden');
+}
+
+elements.btnStress15.addEventListener('click', () => triggerLoadTest(15));
+elements.btnStress45.addEventListener('click', () => triggerLoadTest(45));
+
+elements.btnStressStop.addEventListener('click', async () => {
+    try {
+        await fetch('/api/stop-load', { method: 'POST' });
+        appendLog('Emergency stop received: Simulated load test halted immediately.', 'STRESS');
+        elements.stressFeedback.className = 'feedback-msg success';
+        elements.stressFeedback.textContent = 'Stress test halted. CPU returning to baseline.';
+    } finally {
+        stopStressUI();
     }
 });
 
-// Clear terminal logs
+// 4. Clear Logs
 elements.btnClearLogs.addEventListener('click', () => {
     elements.eventLogContainer.innerHTML = '';
-    appendLog('Event stream cleared.', 'SYS');
+    appendLog('Platform event stream cleared.', 'SYS');
 });
 
-// Start periodic polling every 3 seconds
-setInterval(fetchTelemetry, 3000);
+// 5. Topology Modal controls
+elements.btnOpenTopology.addEventListener('click', () => {
+    elements.topologyModal.classList.remove('hidden');
+});
+elements.btnCloseTopology.addEventListener('click', () => {
+    elements.topologyModal.classList.add('hidden');
+});
+elements.topologyModal.addEventListener('click', (e) => {
+    if (e.target === elements.topologyModal) {
+        elements.topologyModal.classList.add('hidden');
+    }
+});
+
+// Start periodic polling every 2.5 seconds
+setInterval(fetchTelemetry, 2500);
 fetchTelemetry();

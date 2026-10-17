@@ -1,5 +1,4 @@
 import time
-import asyncio
 import psutil
 from datetime import datetime, timezone
 from contextlib import asynccontextmanager
@@ -10,7 +9,7 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
 from config import settings
-from database import init_db, check_db_health, record_visit
+from database import init_db, check_db_health, record_visit, get_recent_visits
 from metrics import (
     HTTP_REQUESTS_TOTAL,
     HTTP_REQUEST_DURATION_SECONDS,
@@ -22,6 +21,7 @@ from metrics import (
 )
 
 START_TIME = time.time()
+STRESS_STOP_FLAG = False
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -87,6 +87,8 @@ async def get_system_telemetry() -> dict:
     cpu_percent = psutil.cpu_percent(interval=None)
     mem = psutil.virtual_memory()
 
+    recent = await get_recent_visits(5)
+
     return {
         "app_name": settings.APP_NAME,
         "version": settings.APP_VERSION,
@@ -104,7 +106,8 @@ async def get_system_telemetry() -> dict:
             "latency_ms": db_latency_ms,
             "status_message": db_msg,
             "host": settings.DB_HOST,
-            "name": settings.DB_NAME
+            "name": settings.DB_NAME,
+            "recent_visits": recent
         },
         "system": {
             "cpu_percent": cpu_percent,
@@ -152,6 +155,12 @@ async def api_status():
     telemetry = await get_system_telemetry()
     return telemetry
 
+@app.get("/api/db-records")
+async def api_db_records(limit: int = 5):
+    """Fetches recent database visit records"""
+    records = await get_recent_visits(limit)
+    return {"records": records}
+
 @app.post("/api/db-query")
 async def api_db_query(request: Request):
     """Executes real read/write transaction on PostgreSQL to demonstrate DB integration"""
@@ -162,15 +171,14 @@ async def api_db_query(request: Request):
 
 # Background load simulator for testing CPU/RAM alerts (> 80%)
 def run_cpu_ram_stress(duration_seconds: int = 45):
+    global STRESS_STOP_FLAG
+    STRESS_STOP_FLAG = False
     SIMULATED_LOAD_ACTIVE.set(1)
     SIMULATED_LOAD_TOTAL.inc()
     try:
         end_time = time.time() + duration_seconds
-        # Allocate ~220MB memory buffer to push container RAM towards limit
         mem_buffer = bytearray(220 * 1024 * 1024)
-        # Intense CPU burn across workers
-        while time.time() < end_time:
-            # Heavy mathematical loop to max out CPU
+        while time.time() < end_time and not STRESS_STOP_FLAG:
             _ = [x ** 2 for x in range(200000)]
         del mem_buffer
     finally:
@@ -188,6 +196,17 @@ async def simulate_load(payload: LoadRequest, background_tasks: BackgroundTasks)
         "success": True,
         "message": f"Simulated CPU & RAM load initiated for {duration} seconds. Watch Prometheus & Grafana react!",
         "duration_seconds": duration
+    }
+
+@app.post("/api/stop-load")
+async def stop_load():
+    """Emergency halt for simulated load testing"""
+    global STRESS_STOP_FLAG
+    STRESS_STOP_FLAG = True
+    SIMULATED_LOAD_ACTIVE.set(0)
+    return {
+        "success": True,
+        "message": "Simulated load testing halted immediately."
     }
 
 @app.get("/metrics")

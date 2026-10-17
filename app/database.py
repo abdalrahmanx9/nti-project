@@ -72,6 +72,28 @@ async def check_db_health() -> tuple[bool, float, str]:
             error_msg = "Connection timed out"
         return False, round(latency, 2), error_msg
 
+async def get_recent_visits(limit: int = 5) -> list[dict]:
+    """Retrieves the latest visit records from PostgreSQL."""
+    try:
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(
+                text("SELECT id, timestamp, client_ip, pod_name FROM visit_logs ORDER BY id DESC LIMIT :limit"),
+                {"limit": limit}
+            )
+            rows = result.fetchall()
+            return [
+                {
+                    "id": r[0],
+                    "timestamp": r[1].strftime("%H:%M:%S") if r[1] else "-",
+                    "client_ip": r[2] or "unknown",
+                    "pod_name": r[3] or "unknown"
+                }
+                for r in rows
+            ]
+    except Exception as e:
+        logger.warning(f"Failed to fetch recent visits: {e}")
+        return []
+
 async def record_visit(client_ip: str = "127.0.0.1", user_agent: str = "system") -> dict:
     """Inserts a visit entry and returns summary telemetry."""
     start_time = time.perf_counter()
@@ -89,11 +111,14 @@ async def record_visit(client_ip: str = "127.0.0.1", user_agent: str = "system")
             result = await session.execute(text("SELECT count(*) FROM visit_logs"))
             total_visits = result.scalar_one_or_none() or 0
         
+        recent = await get_recent_visits(5)
         latency = (time.perf_counter() - start_time) * 1000.0
         return {
             "success": True,
             "total_visits": total_visits,
             "query_latency_ms": round(latency, 2),
+            "recent_visits": recent,
+            "origin_pod": settings.POD_NAME,
             "message": "Visit logged to PostgreSQL successfully"
         }
     except Exception as e:
@@ -102,5 +127,7 @@ async def record_visit(client_ip: str = "127.0.0.1", user_agent: str = "system")
             "success": False,
             "total_visits": 0,
             "query_latency_ms": round(latency, 2),
+            "recent_visits": [],
+            "origin_pod": settings.POD_NAME,
             "message": f"Database write failed: {e}"
         }

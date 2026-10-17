@@ -1,4 +1,3 @@
-import pytest
 from fastapi.testclient import TestClient
 from main import app
 
@@ -41,3 +40,18 @@ def test_dashboard_ui_renders():
     assert response.status_code == 200
     assert "text/html" in response.headers.get("content-type", "")
     assert "NTI DevOps Final Project" in response.text
+
+def test_api_db_records_endpoint():
+    """Verify db-records endpoint returns list of records"""
+    response = client.get("/api/db-records")
+    assert response.status_code == 200
+    data = response.json()
+    assert "records" in data
+    assert isinstance(data["records"], list)
+
+def test_api_stop_load_endpoint():
+    """Verify emergency stop-load returns success status"""
+    response = client.post("/api/stop-load")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] is True
