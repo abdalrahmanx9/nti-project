@@ -117,17 +117,30 @@ pipeline {
         stage('7. GitOps Delivery Trigger (Separate GitOps Repo)') {
             steps {
                 echo "=== Triggering GitOps Delivery via Separate GitOps Repository ==="
-                script {
+                withCredentials([string(credentialsId: 'github-gitops-token', variable: 'GITOPS_PAT')]) {
                     sh """
+                        set -e
                         echo "Target Image Tag: ${IMAGE_TAG}"
-                        echo "Cloning dedicated GitOps repository (watched by ArgoCD)..."
                         rm -rf gitops-repo
-                        git clone https://github.com/abdalrahmanx9/nti-devops-gitops.git gitops-repo || mkdir -p gitops-repo/charts/nti-app
-                        
-                        echo "Updating image tag in GitOps repository charts/nti-app/values.yaml..."
-                        sed -i 's/tag: .*/tag: "${IMAGE_TAG}"/' gitops-repo/charts/nti-app/values.yaml 2>/dev/null || echo "Tag updated: ${IMAGE_TAG}"
-                        
-                        echo "GitOps repository updated. ArgoCD will automatically detect the commit and deploy to EKS!"
+                        git clone "https://\${GITOPS_PAT}@github.com/abdalrahmanx9/nti-devops-gitops.git" gitops-repo
+                        cd gitops-repo
+
+                        git config user.name "jenkins-ci-bot"
+                        git config user.email "jenkins-ci@nti.local"
+
+                        sed -i 's/tag: .*/tag: "${IMAGE_TAG}"/' charts/nti-app/values.yaml
+
+                        if git diff --quiet charts/nti-app/values.yaml; then
+                            echo "Image tag is already ${IMAGE_TAG}. No git commit needed."
+                        else
+                            git add charts/nti-app/values.yaml
+                            git commit -m "chore(release): bump nti-app image tag to ${IMAGE_TAG} [skip ci]"
+                            git pull --rebase origin main
+                            git push origin main
+                            echo "Successfully pushed tag ${IMAGE_TAG} to GitOps repository. ArgoCD will deploy to EKS!"
+                        fi
+                        cd ..
+                        rm -rf gitops-repo
                     """
                 }
             }
