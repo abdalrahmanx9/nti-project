@@ -85,6 +85,12 @@ resource "aws_iam_role_policy_attachment" "jenkins_ssm" {
   role       = aws_iam_role.jenkins.name
 }
 
+# Attach AdministratorAccess for Terraform CI/CD infrastructure automation
+resource "aws_iam_role_policy_attachment" "jenkins_admin" {
+  policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess"
+  role       = aws_iam_role.jenkins.name
+}
+
 # Custom Policy for EKS describe and Secrets Manager read
 resource "aws_iam_policy" "jenkins_extra" {
   name        = "${var.environment}-jenkins-extra-policy"
