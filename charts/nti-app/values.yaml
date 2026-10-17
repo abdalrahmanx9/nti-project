@@ -43,7 +43,7 @@ service:
 
 # Modern Kubernetes Gateway API Configuration (replacing legacy Ingress)
 gateway:
-  enabled: true
+  enabled: false
   className: "amazon-vpc-lattice" # AWS Gateway API controller or Envoy Gateway
   annotations: {}
   listeners:
