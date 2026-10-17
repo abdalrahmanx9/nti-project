@@ -49,7 +49,8 @@ module "rds" {
   environment                = var.environment
   vpc_id                     = module.vpc.vpc_id
   database_subnet_ids        = module.vpc.database_subnet_ids
-  eks_node_security_group_id = module.eks.node_security_group_id
+  eks_node_security_group_id    = module.eks.node_security_group_id
+  eks_cluster_security_group_id = module.eks.cluster_security_group_id
   db_name                    = var.db_name
   db_username                = var.db_username
   db_password                = module.secrets_manager.db_password

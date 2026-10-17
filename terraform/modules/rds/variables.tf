@@ -18,6 +18,12 @@ variable "eks_node_security_group_id" {
   type        = string
 }
 
+variable "eks_cluster_security_group_id" {
+  description = "Security Group ID of the EKS cluster primary SG"
+  type        = string
+  default     = ""
+}
+
 variable "db_name" {
   description = "PostgreSQL database name"
   type        = string
