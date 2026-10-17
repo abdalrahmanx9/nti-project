@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/style.css?v={{ data.asset_hash }}">
 </head>
 <body>
     <div class="page-glow"></div>
@@ -246,8 +246,8 @@
                         <div class="gauge-block">
                             <div class="gauge-wrap">
                                 <svg class="gauge" viewBox="0 0 80 80">
-                                    <circle class="gauge-track" cx="40" cy="40" r="34"></circle>
-                                    <circle class="gauge-fill gauge-cpu" id="cpu-fill" cx="40" cy="40" r="34"
+                                    <circle class="gauge-track" cx="40" cy="40" r="34" fill="none"></circle>
+                                    <circle class="gauge-fill gauge-cpu" id="cpu-fill" cx="40" cy="40" r="34" fill="none"
                                             stroke-dasharray="213.63" stroke-dashoffset="{{ (213.63 * (1 - (data.system.cpu_percent / 100))) | round(1) }}"></circle>
                                 </svg>
                                 <div class="gauge-center mono" id="cpu-text">{{ data.system.cpu_percent }}%</div>
@@ -257,8 +257,8 @@
                         <div class="gauge-block">
                             <div class="gauge-wrap">
                                 <svg class="gauge" viewBox="0 0 80 80">
-                                    <circle class="gauge-track" cx="40" cy="40" r="34"></circle>
-                                    <circle class="gauge-fill gauge-mem" id="mem-fill" cx="40" cy="40" r="34"
+                                    <circle class="gauge-track" cx="40" cy="40" r="34" fill="none"></circle>
+                                    <circle class="gauge-fill gauge-mem" id="mem-fill" cx="40" cy="40" r="34" fill="none"
                                             stroke-dasharray="213.63" stroke-dashoffset="{{ (213.63 * (1 - (data.system.memory_percent / 100))) | round(1) }}"></circle>
                                 </svg>
                                 <div class="gauge-center mono" id="mem-text">{{ data.system.memory_percent }}%</div>
@@ -389,6 +389,6 @@
         </div>
     </div>
 
-    <script src="/static/js/app.js"></script>
+    <script src="/static/js/app.js?v={{ data.asset_hash }}"></script>
 </body>
 </html>

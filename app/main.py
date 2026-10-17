@@ -1,4 +1,6 @@
+import os
 import time
+import hashlib
 import psutil
 from datetime import datetime, timezone
 from contextlib import asynccontextmanager
@@ -22,6 +24,20 @@ from metrics import (
 
 START_TIME = time.time()
 STRESS_STOP_FLAG = False
+
+def _calc_asset_hash() -> str:
+    # ponytail: content-hashed query param busts Cloudflare and browser edge caches automatically on asset changes
+    try:
+        data = b""
+        for path in ("static/css/style.css", "static/js/app.js"):
+            if os.path.exists(path):
+                with open(path, "rb") as f:
+                    data += f.read()
+        return hashlib.md5(data).hexdigest()[:10] if data else "1.0.0"
+    except Exception:
+        return "1.0.0"
+
+ASSET_HASH = _calc_asset_hash()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -75,6 +91,9 @@ async def prometheus_metrics_middleware(request: Request, call_next):
             endpoint=endpoint_label
         ).observe(duration)
 
+    if endpoint_label == "/static/*":
+        response.headers["Cache-Control"] = "no-cache, must-revalidate"
+
     return response
 
 # Helper function to gather real-time status
@@ -89,9 +108,10 @@ async def get_system_telemetry() -> dict:
 
     recent = await get_recent_visits(5)
 
-    return {
+    return {  
         "app_name": settings.APP_NAME,
         "version": settings.APP_VERSION,
+        "asset_hash": ASSET_HASH,
         "environment": settings.APP_ENV,
         "uptime_seconds": uptime_seconds,
         "uptime_formatted": f"{uptime_seconds // 3600}h {(uptime_seconds % 3600) // 60}m {uptime_seconds % 60}s",
